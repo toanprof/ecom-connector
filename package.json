@@ -1,0 +1,70 @@
+{
+  "name": "ecom-connector",
+  "version": "1.0.0",
+  "description": "A unified abstraction layer for integrating with multiple e-commerce platforms (Zalo OA, TikTok Shop, Shopee, Lazada)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
+    "precheck": "node pre-publish-check.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ecommerce",
+    "e-commerce",
+    "shopee",
+    "shopee-api",
+    "lazada",
+    "lazada-api",
+    "tiktok-shop",
+    "tiktok-shop-api",
+    "zalo-oa",
+    "zalo",
+    "api",
+    "connector",
+    "integration",
+    "marketplace",
+    "multi-platform",
+    "typescript",
+    "vietnam",
+    "southeast-asia"
+  ],
+  "author": "Toàn Nguyễn Minh<andreapirlo257@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toanprof/ecom-connector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/toanprof/ecom-connector/issues"
+  },
+  "homepage": "https://github.com/toanprof/ecom-connector#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "QUICK_START.md",
+    "USER_GUIDE.md",
+    "TIKTOK_SHOP_SETUP.md"
+  ],
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "dotenv": "^16.0.0 || ^17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "dotenv": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

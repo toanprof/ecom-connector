@@ -1,0 +1,61 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Config files
+tsconfig.json
+.env
+.env.example
+
+# Documentation (internal)
+SOURCE_CODE.md
+SOURCE_CODE_PART2.md
+SETUP_COMPLETE.md
+PROJECT_SUMMARY.md
+INSTALLATION_GUIDE.md
+INDEX.md
+START_HERE.txt
+
+# Scripts
+setup.js
+setup-dirs.bat
+quickstart.bat
+extract-source.py
+tiktok-demo.js
+
+# Examples (optional - uncomment to exclude)
+# examples/
+
+# Tests
+test/
+*.test.ts
+*.test.js
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Build artifacts
+*.log
+.cache/
