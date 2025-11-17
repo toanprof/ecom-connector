@@ -1,6 +1,6 @@
 {
   "name": "ecom-connector",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A unified abstraction layer for integrating with multiple e-commerce platforms (Zalo OA, TikTok Shop, Shopee, Lazada)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
