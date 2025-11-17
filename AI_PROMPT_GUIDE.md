@@ -52,6 +52,11 @@ Giải thích chi tiết:
 - Token-based auth (Zalo OA)
 - Axios interceptors để auto-sign requests
 - Timestamp synchronization
+- **Shopee OAuth Flow**: 
+  - generateAuthUrl() - Tạo authorization URL
+  - getAccessToken() - Exchange code cho tokens (hỗ trợ shop_id và main_account_id)
+  - refreshAccessToken() - Refresh expired tokens
+  - Shop ID vs Main Account ID - Khi nào dùng cái nào
 
 ### 7. USE CASES & EXAMPLES
 Hướng dẫn tôi implement:
@@ -60,6 +65,8 @@ Hướng dẫn tôi implement:
 - Xử lý pagination để lấy toàn bộ data
 - Error handling và retry logic
 - Switch giữa sandbox và production
+- **Shopee OAuth authentication flow**: Authorization URL → Code → Access Token → Refresh Token
+- Sử dụng shop_id vs main_account_id trong authentication
 
 ### 8. EXTENDING THE CODEBASE
 Nếu tôi muốn:
@@ -78,6 +85,12 @@ Hãy giải thích từng bước cụ thể và các file cần modify.
 - Access token expired
 - Null safety với nested objects
 - Platform-specific limitations
+- **Shopee authentication errors**:
+  - Missing code or shop_id error
+  - Redirect URL not configured
+  - Invalid authorization code (single-use)
+  - Token refresh failures
+  - Shop ID vs Main Account ID confusion
 
 ### 10. BEST PRACTICES
 - Cách structure code khi dùng package này

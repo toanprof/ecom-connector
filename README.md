@@ -2,6 +2,14 @@
 
 A unified abstraction layer for integrating with multiple e-commerce platforms including Zalo OA, TikTok Shop, Shopee, and Lazada.
 
+## 🆕 What's New in v1.1.0
+
+- ✅ **Shopee OAuth Authentication**: Complete OAuth 2.0 flow with `generateAuthUrl()`, `getAccessToken()`, and `refreshAccessToken()`
+- ✅ **Shop ID & Main Account ID Support**: Choose between shop-level or account-level authorization
+- ✅ **Enhanced Order API**: 28+ optional fields including payment info, shipping tracking, package details
+- ✅ **Improved Type Safety**: Comprehensive TypeScript types for all API responses
+- ✅ **Better Error Handling**: Clear error messages for authentication and API failures
+
 ## Features
 
 - 🔌 **Plugin-based Architecture**: Easily switch between platforms by changing configuration
@@ -44,6 +52,11 @@ Create a `.env` file in your project root:
 SHOPEE_PARTNER_ID=your_partner_id
 SHOPEE_PARTNER_KEY=your_partner_key
 SHOPEE_SHOP_ID=your_shop_id
+# Optional: For authenticated requests (obtain via OAuth flow)
+SHOPEE_ACCESS_TOKEN=your_access_token
+SHOPEE_REFRESH_TOKEN=your_refresh_token
+# Alternative: Use Main Account ID for multi-shop sellers
+# SHOPEE_MAIN_ACCOUNT_ID=your_main_account_id
 
 # TikTok Shop Configuration
 TIKTOK_APP_KEY=your_app_key
@@ -76,7 +89,8 @@ async function main() {
     credentials: {
       partnerId: process.env.SHOPEE_PARTNER_ID!,
       partnerKey: process.env.SHOPEE_PARTNER_KEY!,
-      shopId: process.env.SHOPEE_SHOP_ID!
+      shopId: process.env.SHOPEE_SHOP_ID!,
+      accessToken: process.env.SHOPEE_ACCESS_TOKEN // Optional: for authenticated requests
     }
   });
 
@@ -116,7 +130,8 @@ const connector = createEcomConnector({
   credentials: {
     partnerId: 'YOUR_PARTNER_ID',
     partnerKey: 'YOUR_PARTNER_KEY',
-    shopId: 'YOUR_SHOP_ID'
+    shopId: 'YOUR_SHOP_ID',
+    accessToken: 'YOUR_ACCESS_TOKEN' // Optional: for authenticated requests
   },
   sandbox: true // Optional: use sandbox environment
 });
@@ -125,7 +140,60 @@ const connector = createEcomConnector({
 **How to get credentials:**
 1. Register at [Shopee Open Platform](https://open.shopee.com/)
 2. Create an app to get Partner ID and Partner Key
-3. Authorize your shop to get Shop ID
+3. Authorize your shop to get Shop ID and Access Token
+
+**OAuth Authentication Flow:**
+
+```typescript
+// Step 1: Generate authorization URL
+const authUrl = connector.generateAuthUrl('http://localhost:3000/callback');
+console.log('Visit:', authUrl);
+// User will be redirected to callback URL with code parameter
+
+// Step 2: Exchange authorization code for tokens
+// Use EITHER shop_id OR main_account_id (not both)
+const tokenResult = await connector.getAccessToken(
+  authorizationCode,
+  shopId // For shop-level authorization
+);
+// OR
+const tokenResult = await connector.getAccessToken(
+  authorizationCode,
+  undefined,
+  mainAccountId // For account-level authorization (multi-shop sellers)
+);
+
+console.log('Access Token:', tokenResult.access_token);
+console.log('Refresh Token:', tokenResult.refresh_token);
+console.log('Expires in:', tokenResult.expire_in, 'seconds');
+
+// Step 3: Use access token for API calls
+const authenticatedConnector = createEcomConnector({
+  platform: 'shopee',
+  credentials: {
+    partnerId: 'YOUR_PARTNER_ID',
+    partnerKey: 'YOUR_PARTNER_KEY',
+    shopId: 'YOUR_SHOP_ID',
+    accessToken: tokenResult.access_token
+  },
+  sandbox: true
+});
+
+const products = await authenticatedConnector.getProducts();
+
+// Step 4: Refresh token when expired (tokens expire after 4 hours)
+const refreshResult = await connector.refreshAccessToken(
+  tokenResult.refresh_token,
+  shopId // Or mainAccountId
+);
+```
+
+**Shop ID vs Main Account ID:**
+- **Shop ID**: Use for single shop authorization (most common)
+- **Main Account ID**: Use for account-level authorization (multi-shop sellers)
+- You can use **EITHER** shop_id **OR** main_account_id, but **NOT both**
+
+**Note**: Access tokens expire after 4 hours. Refresh tokens are valid for 30 days.
 
 ### TikTok Shop
 
@@ -184,6 +252,53 @@ const connector = createEcomConnector({
 ## API Reference
 
 All platforms implement the same `ECommercePlatform` interface:
+
+### Authentication (Shopee Only)
+
+#### `generateAuthUrl(redirectUrl: string): string`
+
+Generate authorization URL for OAuth flow.
+
+```typescript
+const authUrl = connector.generateAuthUrl('http://localhost:3000/callback');
+// Redirect user to this URL for authorization
+```
+
+#### `getAccessToken(code: string, shopId?: string, mainAccountId?: string): Promise<TokenResponse>`
+
+Exchange authorization code for access token and refresh token.
+
+```typescript
+// With shop_id (shop-level authorization)
+const result = await connector.getAccessToken(code, shopId);
+
+// With main_account_id (account-level authorization)
+const result = await connector.getAccessToken(code, undefined, mainAccountId);
+
+// Response
+console.log(result.access_token);
+console.log(result.refresh_token);
+console.log(result.expire_in); // 14400 seconds (4 hours)
+console.log(result.shop_id || result.main_account_id);
+```
+
+#### `refreshAccessToken(refreshToken: string, shopId?: string, mainAccountId?: string): Promise<TokenResponse>`
+
+Refresh expired access token.
+
+```typescript
+// With shop_id
+const result = await connector.refreshAccessToken(refreshToken, shopId);
+
+// With main_account_id
+const result = await connector.refreshAccessToken(refreshToken, undefined, mainAccountId);
+```
+
+**Important**: 
+- Use either `shopId` OR `mainAccountId`, not both
+- Access tokens expire after 4 hours
+- Refresh tokens are valid for 30 days
+- Authorization codes are single-use only
 
 ### Products
 
@@ -335,6 +450,29 @@ try {
 }
 ```
 
+### Common Authentication Errors (Shopee)
+
+```typescript
+try {
+  const result = await connector.getAccessToken(code, shopId);
+} catch (error) {
+  if (error instanceof EcomConnectorError) {
+    switch (error.code) {
+      case 'INVALID_PARAMS':
+        // Missing shop_id or main_account_id, or both provided
+        console.error('Provide either shopId or mainAccountId');
+        break;
+      case 'AUTH_ERROR':
+        // Invalid authorization code or credentials
+        console.error('Check your authorization code and credentials');
+        break;
+      default:
+        console.error('Unexpected error:', error.message);
+    }
+  }
+}
+```
+
 ## Development
 
 ### Setup
@@ -349,6 +487,32 @@ node setup.js
 # Build the project
 npm run build
 ```
+
+### Testing
+
+The package includes comprehensive test files for Shopee authentication:
+
+```bash
+# Test token refresh
+node test-refresh-token.js
+
+# Test both shop_id and main_account_id authentication
+node test-auth-both-types.js <code> <shop_id> <main_account_id>
+
+# Automated OAuth flow with callback server
+node shopee-auth-demo.js
+
+# Full demo of all features
+node shopee-demo.js
+```
+
+### Documentation
+
+- **[SHOPEE_AUTH_TYPES.md](./SHOPEE_AUTH_TYPES.md)** - Complete guide on shop_id vs main_account_id
+- **[QUICK_AUTH_REFERENCE.md](./QUICK_AUTH_REFERENCE.md)** - Visual quick reference for authentication
+- **[AUTH_UPDATE_SUMMARY.md](./AUTH_UPDATE_SUMMARY.md)** - Summary of v1.1.0 authentication updates
+- **[USER_GUIDE.md](./USER_GUIDE.md)** - Comprehensive usage guide
+- **[AI_PROMPT_GUIDE.md](./AI_PROMPT_GUIDE.md)** - Guide for using AI assistants with this codebase
 
 ### Project Structure
 
