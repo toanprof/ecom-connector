@@ -20,6 +20,19 @@ async function shopeeDemo() {
   console.log('✓ Found Shopee credentials');
   console.log('  Partner ID:', process.env.SHOPEE_PARTNER_ID);
   console.log('  Shop ID:', process.env.SHOPEE_SHOP_ID);
+  
+  // Check if access token is available
+  if (!process.env.SHOPEE_ACCESS_TOKEN) {
+    console.log('\n⚠️  No access token found!');
+    console.log('\nTo get access token, run:');
+    console.log('  node shopee-auth-demo.js   (Automated flow - Recommended)');
+    console.log('  OR');
+    console.log('  node shopee-auth-helper.js  (Manual flow)');
+    console.log();
+    process.exit(1);
+  }
+  
+  console.log('  ✓ Access Token: ' + process.env.SHOPEE_ACCESS_TOKEN.substring(0, 20) + '...');
   console.log();
 
   try {
@@ -37,9 +50,60 @@ async function shopeeDemo() {
     });
 
     console.log('✅ Connector created successfully\n');
+    console.log('═'.repeat(60));
+
+    // ==================== AUTHENTICATION ====================
+    console.log('\n🔐 AUTHENTICATION FEATURES');
+    console.log('═'.repeat(60));
+    
+    console.log('\n[Info] Authentication Methods Available:\n');
+    console.log('  1. generateAuthUrl(redirectUrl)');
+    console.log('     - Generate authorization URL for shop authorization');
+    console.log('     - User must visit URL and authorize the app');
+    console.log();
+    
+    console.log('  2. getAccessToken(code, shopId)');
+    console.log('     - Exchange authorization code for access token');
+    console.log('     - Code is obtained from authorization callback');
+    console.log();
+    
+    console.log('  3. refreshAccessToken(refreshToken, shopId)');
+    console.log('     - Refresh expired access token');
+    console.log('     - Returns new access token and refresh token');
+    console.log();
+    
+    // Demo: Generate auth URL
+    console.log('─'.repeat(60));
+    console.log('\n[Demo] Generating Authorization URL...\n');
+    
+    const demoRedirectUrl = 'https://www.example.com/callback';
+    const demoAuthUrl = connector.generateAuthUrl(demoRedirectUrl);
+    
+    console.log('  Redirect URL:', demoRedirectUrl);
+    console.log('  Authorization URL:');
+    console.log('  ' + demoAuthUrl);
+    console.log();
+    console.log('  ℹ️  To actually authorize, run: node shopee-auth-demo.js');
+    console.log();
+    
+    // Check if refresh token is available
+    if (process.env.SHOPEE_REFRESH_TOKEN) {
+      console.log('─'.repeat(60));
+      console.log('\n[Demo] Token Refresh Available\n');
+      console.log('  ✓ Refresh token found');
+      console.log('  ℹ️  To test refresh: node shopee-get-token.js <code> <shop_id>');
+      console.log();
+    } else {
+      console.log('─'.repeat(60));
+      console.log('\n[Info] No refresh token in .env');
+      console.log('  Run shopee-auth-demo.js to get refresh token');
+      console.log();
+    }
 
     // ==================== PRODUCTS ====================
-    console.log('\n📦 PRODUCT OPERATIONS');
+    console.log('\n═'.repeat(60));
+    console.log('📦 PRODUCT OPERATIONS');
+    console.log('═'.repeat(60));
 
     // 1. Get products list
     console.log('\n[1] Fetching products list (limit: 5)...');

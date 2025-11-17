@@ -549,4 +549,213 @@ export class ShopeePlatform implements ECommercePlatform {
       501
     );
   }
+
+  /**
+   * Generate authorization URL for shop authorization
+   * @param redirectUrl - The redirect URL after authorization
+   * @returns Authorization URL
+   */
+  generateAuthUrl(redirectUrl: string): string {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+    const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
+    
+    const sign = crypto
+      .createHmac("sha256", this.credentials.partnerKey)
+      .update(baseString)
+      .digest("hex");
+
+    const params = new URLSearchParams({
+      partner_id: this.credentials.partnerId.toString(),
+      timestamp: timestamp.toString(),
+      sign: sign,
+      redirect: redirectUrl,
+    });
+
+    return `${this.baseURL}${path}?${params.toString()}`;
+  }
+
+  /**
+   * Get access token using authorization code
+   * @param code - Authorization code from callback
+   * @param shopId - Shop ID (use either shopId or mainAccountId, not both)
+   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId, not both)
+   * @returns Access token and related information
+   */
+  async getAccessToken(
+    code: string,
+    shopId?: string,
+    mainAccountId?: string
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expire_in: number;
+    shop_id?: number;
+    main_account_id?: number;
+    partner_id: number;
+  }> {
+    try {
+      if (!shopId && !mainAccountId) {
+        throw new EcomConnectorError(
+          "Either shopId or mainAccountId must be provided",
+          "INVALID_PARAMS",
+          400
+        );
+      }
+
+      if (shopId && mainAccountId) {
+        throw new EcomConnectorError(
+          "Cannot provide both shopId and mainAccountId, use only one",
+          "INVALID_PARAMS",
+          400
+        );
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const path = "/api/v2/auth/token/get";
+      const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
+      
+      const sign = crypto
+        .createHmac("sha256", this.credentials.partnerKey)
+        .update(baseString)
+        .digest("hex");
+
+      const requestBody: any = {
+        code,
+        partner_id: parseInt(this.credentials.partnerId),
+      };
+
+      if (shopId) {
+        requestBody.shop_id = parseInt(shopId);
+      } else if (mainAccountId) {
+        requestBody.main_account_id = parseInt(mainAccountId);
+      }
+
+      const response = await axios.post(
+        `${this.baseURL}${path}`,
+        requestBody,
+        {
+          params: {
+            partner_id: this.credentials.partnerId,
+            timestamp,
+            sign,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message || "Failed to get access token",
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get access token",
+        "AUTH_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Refresh access token using refresh token
+   * @param refreshToken - Refresh token
+   * @param shopId - Shop ID (use either shopId or mainAccountId, not both)
+   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId, not both)
+   * @returns New access token and related information
+   */
+  async refreshAccessToken(
+    refreshToken: string,
+    shopId?: string,
+    mainAccountId?: string
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expire_in: number;
+    shop_id?: number;
+    main_account_id?: number;
+    partner_id: number;
+  }> {
+    try {
+      if (!shopId && !mainAccountId) {
+        throw new EcomConnectorError(
+          "Either shopId or mainAccountId must be provided",
+          "INVALID_PARAMS",
+          400
+        );
+      }
+
+      if (shopId && mainAccountId) {
+        throw new EcomConnectorError(
+          "Cannot provide both shopId and mainAccountId, use only one",
+          "INVALID_PARAMS",
+          400
+        );
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const path = "/api/v2/auth/access_token/get";
+      const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
+      
+      const sign = crypto
+        .createHmac("sha256", this.credentials.partnerKey)
+        .update(baseString)
+        .digest("hex");
+
+      const requestBody: any = {
+        refresh_token: refreshToken,
+        partner_id: parseInt(this.credentials.partnerId),
+      };
+
+      if (shopId) {
+        requestBody.shop_id = parseInt(shopId);
+      } else if (mainAccountId) {
+        requestBody.main_account_id = parseInt(mainAccountId);
+      }
+
+      const response = await axios.post(
+        `${this.baseURL}${path}`,
+        requestBody,
+        {
+          params: {
+            partner_id: this.credentials.partnerId,
+            timestamp,
+            sign,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message || "Failed to refresh access token",
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to refresh access token",
+        "AUTH_ERROR",
+        500,
+        error
+      );
+    }
+  }
 }

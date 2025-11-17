@@ -165,6 +165,49 @@ export interface ECommercePlatform {
    * Update order status
    */
   updateOrderStatus(id: string, status: string): Promise<Order>;
+
+  /**
+   * Generate authorization URL (Shopee only)
+   */
+  generateAuthUrl?(redirectUrl: string): string;
+
+  /**
+   * Get access token using authorization code (Shopee only)
+   * @param code - Authorization code
+   * @param shopId - Shop ID (use either shopId or mainAccountId)
+   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId)
+   */
+  getAccessToken?(
+    code: string,
+    shopId?: string,
+    mainAccountId?: string
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expire_in: number;
+    shop_id?: number;
+    main_account_id?: number;
+    partner_id: number;
+  }>;
+
+  /**
+   * Refresh access token (Shopee only)
+   * @param refreshToken - Refresh token
+   * @param shopId - Shop ID (use either shopId or mainAccountId)
+   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId)
+   */
+  refreshAccessToken?(
+    refreshToken: string,
+    shopId?: string,
+    mainAccountId?: string
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expire_in: number;
+    shop_id?: number;
+    main_account_id?: number;
+    partner_id: number;
+  }>;
 }
 
 // Custom error class
