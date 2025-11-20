@@ -9,7 +9,7 @@ export interface Product {
   sku?: string;
   images?: string[];
   categoryId?: string;
-  status: 'active' | 'inactive' | 'out_of_stock';
+  status: "active" | "inactive" | "out_of_stock";
   createdAt?: Date;
   updatedAt?: Date;
   platformSpecific?: any; // Platform-specific data
@@ -24,7 +24,7 @@ export interface ProductInput {
   sku?: string;
   images?: string[];
   categoryId?: string;
-  status?: 'active' | 'inactive';
+  status?: "active" | "inactive";
   platformSpecific?: any;
 }
 
@@ -88,7 +88,7 @@ export interface Address {
 }
 
 // Configuration interfaces
-export type PlatformType = 'zalo-oa' | 'tiktok-shop' | 'shopee' | 'lazada';
+export type PlatformType = "zalo-oa" | "tiktok-shop" | "shopee" | "lazada";
 
 export interface ZaloOACredentials {
   appId: string;
@@ -116,10 +116,10 @@ export interface LazadaCredentials {
   accessToken?: string;
 }
 
-export type PlatformCredentials = 
-  | ZaloOACredentials 
-  | TikTokShopCredentials 
-  | ShopeeCredentials 
+export type PlatformCredentials =
+  | ZaloOACredentials
+  | TikTokShopCredentials
+  | ShopeeCredentials
   | LazadaCredentials;
 
 export interface EcomConnectorConfig {
@@ -149,7 +149,10 @@ export interface ECommercePlatform {
   /**
    * Update an existing product
    */
-  updateProduct(id: string, productData: Partial<ProductInput>): Promise<Product>;
+  updateProduct(
+    id: string,
+    productData: Partial<ProductInput>
+  ): Promise<Product>;
 
   /**
    * Get a list of orders
@@ -167,47 +170,35 @@ export interface ECommercePlatform {
   updateOrderStatus(id: string, status: string): Promise<Order>;
 
   /**
-   * Generate authorization URL (Shopee only)
+   * Generate authorization URL
+   * @param redirectUrl - Redirect URL after authorization
+   * @param uuid - UUID for Lazada (optional)
    */
-  generateAuthUrl?(redirectUrl: string): string;
+  generateAuthUrl?(redirectUrl: string, uuid?: string): string;
 
   /**
-   * Get access token using authorization code (Shopee only)
+   * Get access token using authorization code
    * @param code - Authorization code
-   * @param shopId - Shop ID (use either shopId or mainAccountId)
-   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId)
+   * @param shopIdOrUuid - Shop ID for Shopee/TikTok or UUID for Lazada
+   * @param mainAccountId - Main Account ID for Shopee (optional)
    */
   getAccessToken?(
     code: string,
-    shopId?: string,
+    shopIdOrUuid?: string,
     mainAccountId?: string
-  ): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expire_in: number;
-    shop_id?: number;
-    main_account_id?: number;
-    partner_id: number;
-  }>;
+  ): Promise<any>;
 
   /**
-   * Refresh access token (Shopee only)
+   * Refresh access token
    * @param refreshToken - Refresh token
-   * @param shopId - Shop ID (use either shopId or mainAccountId)
-   * @param mainAccountId - Main Account ID (use either shopId or mainAccountId)
+   * @param shopId - Shop ID (optional, for Shopee)
+   * @param mainAccountId - Main Account ID (optional, for Shopee)
    */
   refreshAccessToken?(
     refreshToken: string,
     shopId?: string,
     mainAccountId?: string
-  ): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expire_in: number;
-    shop_id?: number;
-    main_account_id?: number;
-    partner_id: number;
-  }>;
+  ): Promise<any>;
 }
 
 // Custom error class
@@ -219,7 +210,7 @@ export class EcomConnectorError extends Error {
     public platformError?: any
   ) {
     super(message);
-    this.name = 'EcomConnectorError';
+    this.name = "EcomConnectorError";
     Object.setPrototypeOf(this, EcomConnectorError.prototype);
   }
 }

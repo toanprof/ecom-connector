@@ -19,20 +19,20 @@ export interface ShopeeProduct {
   item_status: string;
   create_time: number;
   update_time: number;
-  
+
   // New nested structure from Shopee API v2
   price_info?: Array<{
     currency: string;
     original_price: number;
     current_price: number;
   }>;
-  
+
   image?: {
     image_id_list: string[];
     image_url_list: string[];
     image_ratio?: string;
   };
-  
+
   stock_info_v2?: {
     summary_info: {
       total_reserved_stock: number;
@@ -45,7 +45,7 @@ export interface ShopeeProduct {
       in_transit_advance_stock: number;
     };
   };
-  
+
   description_info?: {
     extended_description?: {
       field_list: Array<{
@@ -54,14 +54,14 @@ export interface ShopeeProduct {
       }>;
     };
   };
-  
+
   weight?: string;
   dimension?: {
     package_length: number;
     package_width: number;
     package_height: number;
   };
-  
+
   logistic_info?: Array<{
     logistic_id: number;
     logistic_name: string;
@@ -70,19 +70,19 @@ export interface ShopeeProduct {
     is_free?: boolean;
     estimated_shipping_fee?: number;
   }>;
-  
+
   pre_order?: {
     is_pre_order: boolean;
     days_to_ship: number;
   };
-  
+
   condition?: string;
   has_model?: boolean;
   brand?: {
     brand_id: number;
     original_brand_name: string;
   };
-  
+
   complaint_policy?: any;
   description_type?: string;
   gtin_code?: string;
@@ -122,7 +122,7 @@ export interface ShopeeOrder {
   };
   create_time: number;
   update_time: number;
-  
+
   // Optional fields from response_optional_fields
   estimated_shipping_fee?: number;
   actual_shipping_fee?: number;
@@ -132,21 +132,21 @@ export interface ShopeeOrder {
   note_update_time?: number;
   pay_time?: number;
   payment_method?: string;
-  
+
   // Dropshipper info
   dropshipper?: string;
   dropshipper_phone?: string;
-  
+
   // Shipping info
   split_up?: boolean;
   shipping_carrier?: string;
   pickup_done_time?: number;
-  
+
   // Cancellation info
   buyer_cancel_reason?: string;
   cancel_by?: string;
   cancel_reason?: string;
-  
+
   // Additional info
   buyer_cpf_id?: string;
   fulfillment_flag?: string;
@@ -154,7 +154,7 @@ export interface ShopeeOrder {
   order_chargeable_weight_gram?: number;
   return_request_due_date?: number;
   edt?: number; // Estimated delivery time
-  
+
   // Package and logistics
   package_list?: Array<{
     package_number: string;
@@ -165,7 +165,7 @@ export interface ShopeeOrder {
       model_id: number;
     }>;
   }>;
-  
+
   // Payment info structure
   payment_info?: {
     buyer_paid_amount?: number;

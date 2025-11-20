@@ -2,13 +2,33 @@
 
 A unified abstraction layer for integrating with multiple e-commerce platforms including Zalo OA, TikTok Shop, Shopee, and Lazada.
 
-## 🆕 What's New in v1.1.0
+## 🆕 What's New in v1.2.0
 
-- ✅ **Shopee OAuth Authentication**: Complete OAuth 2.0 flow with `generateAuthUrl()`, `getAccessToken()`, and `refreshAccessToken()`
-- ✅ **Shop ID & Main Account ID Support**: Choose between shop-level or account-level authorization
-- ✅ **Enhanced Order API**: 28+ optional fields including payment info, shipping tracking, package details
-- ✅ **Improved Type Safety**: Comprehensive TypeScript types for all API responses
-- ✅ **Better Error Handling**: Clear error messages for authentication and API failures
+### Major Updates
+- ✅ **CamelCase Transformation**: All API responses now automatically converted to camelCase for better JavaScript/TypeScript conventions
+- ✅ **Extended APIs**: Added 40+ new methods across all platforms
+- ✅ **Complete Authorization**: OAuth flows for Shopee, TikTok Shop, and Lazada
+- ✅ **Product Management**: Categories, brands, attributes, stock/price updates
+- ✅ **Logistics Integration**: Shipping channels, parameters, and order fulfillment
+- ✅ **Fulfillment APIs**: TikTok Shop package management and shipping documents
+
+### Platform-Specific Additions
+
+#### Shopee (15+ new methods)
+- Authorization: `generateAuthUrl()`, `getAccessToken()`, `refreshAccessToken()`
+- Products: `getCategories()`, `getCategoryAttributes()`, `getBrandList()`, `updateStock()`, `updatePrice()`, `unlistItem()`, `deleteProduct()`
+- Logistics: `getLogisticsChannelList()`, `getShippingParameter()`, `shipOrder()`
+
+#### TikTok Shop (12+ new methods)
+- Authorization: `getAccessToken()`, `refreshAccessToken()`, `getAuthorizedShops()`
+- Products: `getCategories()`, `getCategoryRules()`, `getBrands()`, `getCategoryAttributes()`, `uploadProductImage()`, `activateProducts()`, `deactivateProducts()`
+- Fulfillment: `getPackageTimeSlots()`, `shipPackage()`, `getPackageShippingDocument()`
+
+#### Lazada (10+ new methods)
+- Authorization: `generateAuthUrl()`, `getAccessToken()`, `refreshAccessToken()`
+- Products: `getCategories()`, `getCategoryAttributes()`, `getBrands()`, `updateSellableQuantity()`, `updateProductPrice()`, `updateProductStatus()`
+
+📚 **See [API_EXTENSIONS.md](./API_EXTENSIONS.md) for detailed documentation**
 
 ## Features
 
@@ -17,6 +37,7 @@ A unified abstraction layer for integrating with multiple e-commerce platforms i
 - 🎯 **Unified Interface**: Common API across all platforms
 - ⚡ **Easy Configuration**: Simple, environment-based configuration
 - 🛡️ **Error Handling**: Consistent error handling across all platforms
+- 🔄 **CamelCase by Default**: All responses automatically transformed to camelCase
 
 ## Installation
 

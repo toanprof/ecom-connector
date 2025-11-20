@@ -152,10 +152,10 @@ async function shopeeDemo() {
             }
             if (product.platformSpecific.dimension) {
               const d = product.platformSpecific.dimension;
-              console.log(`    Dimensions: ${d.package_length}x${d.package_width}x${d.package_height}cm`);
+              console.log(`    Dimensions: ${d.packageLength}x${d.packageWidth}x${d.packageHeight}cm`);
             }
             if (product.platformSpecific.brand) {
-              console.log(`    Brand: ${product.platformSpecific.brand.original_brand_name}`);
+              console.log(`    Brand: ${product.platformSpecific.brand.originalBrandName}`);
             }
           }
           console.log();
@@ -289,20 +289,20 @@ async function shopeeDemo() {
             const ps = order.platformSpecific;
             console.log('\n  Extended Information:');
 
-            if (ps.payment_method) {
-              console.log(`    Payment Method: ${ps.payment_method}`);
+            if (ps.paymentMethod) {
+              console.log(`    Payment Method: ${ps.paymentMethod}`);
             }
 
-            if (ps.shipping_carrier) {
-              console.log(`    Shipping Carrier: ${ps.shipping_carrier}`);
+            if (ps.shippingCarrier) {
+              console.log(`    Shipping Carrier: ${ps.shippingCarrier}`);
             }
 
-            if (ps.estimated_shipping_fee !== undefined) {
-              console.log(`    Estimated Shipping Fee: ${ps.estimated_shipping_fee}`);
+            if (ps.estimatedShippingFee !== undefined) {
+              console.log(`    Estimated Shipping Fee: ${ps.estimatedShippingFee}`);
             }
 
-            if (ps.actual_shipping_fee !== undefined) {
-              console.log(`    Actual Shipping Fee: ${ps.actual_shipping_fee}`);
+            if (ps.actualShippingFee !== undefined) {
+              console.log(`    Actual Shipping Fee: ${ps.actualShippingFee}`);
             }
 
             if (ps.note) {
@@ -311,45 +311,45 @@ async function shopeeDemo() {
 
             if (ps.dropshipper) {
               console.log(`    Dropshipper: ${ps.dropshipper}`);
-              if (ps.dropshipper_phone) {
-                console.log(`    Dropshipper Phone: ${ps.dropshipper_phone}`);
+              if (ps.dropshipperPhone) {
+                console.log(`    Dropshipper Phone: ${ps.dropshipperPhone}`);
               }
             }
 
             // Payment breakdown
-            if (ps.payment_info) {
+            if (ps.paymentInfo) {
               console.log('\n  Payment Breakdown:');
-              const pi = ps.payment_info;
-              if (pi.original_price) console.log(`    Original Price: ${pi.original_price}`);
-              if (pi.seller_discount) console.log(`    Seller Discount: -${pi.seller_discount}`);
-              if (pi.platform_discount) console.log(`    Platform Discount: -${pi.platform_discount}`);
-              if (pi.voucher_from_seller) console.log(`    Voucher (Seller): -${pi.voucher_from_seller}`);
-              if (pi.voucher_from_shopee) console.log(`    Voucher (Shopee): -${pi.voucher_from_shopee}`);
-              if (pi.shipping_fee) console.log(`    Shipping Fee: ${pi.shipping_fee}`);
-              if (pi.buyer_paid_amount) console.log(`    Buyer Paid Amount: ${pi.buyer_paid_amount}`);
+              const pi = ps.paymentInfo;
+              if (pi.originalPrice) console.log(`    Original Price: ${pi.originalPrice}`);
+              if (pi.sellerDiscount) console.log(`    Seller Discount: -${pi.sellerDiscount}`);
+              if (pi.platformDiscount) console.log(`    Platform Discount: -${pi.platformDiscount}`);
+              if (pi.voucherFromSeller) console.log(`    Voucher (Seller): -${pi.voucherFromSeller}`);
+              if (pi.voucherFromShopee) console.log(`    Voucher (Shopee): -${pi.voucherFromShopee}`);
+              if (pi.shippingFee) console.log(`    Shipping Fee: ${pi.shippingFee}`);
+              if (pi.buyerPaidAmount) console.log(`    Buyer Paid Amount: ${pi.buyerPaidAmount}`);
             }
 
             // Package tracking
-            if (ps.package_list && ps.package_list.length > 0) {
-              console.log(`\n  Package Tracking (${ps.package_list.length}):`);
-              ps.package_list.forEach((pkg, idx) => {
+            if (ps.packageList && ps.packageList.length > 0) {
+              console.log(`\n  Package Tracking (${ps.packageList.length}):`);
+              ps.packageList.forEach((pkg, idx) => {
                 console.log(`    Package #${idx + 1}:`);
-                console.log(`      Tracking Number: ${pkg.package_number}`);
-                console.log(`      Status: ${pkg.logistics_status}`);
-                console.log(`      Carrier: ${pkg.shipping_carrier}`);
-                if (pkg.item_list) {
-                  console.log(`      Items: ${pkg.item_list.length}`);
+                console.log(`      Tracking Number: ${pkg.packageNumber}`);
+                console.log(`      Status: ${pkg.logisticsStatus}`);
+                console.log(`      Carrier: ${pkg.shippingCarrier}`);
+                if (pkg.itemList) {
+                  console.log(`      Items: ${pkg.itemList.length}`);
                 }
               });
             }
 
             // Cancellation info
-            if (ps.cancel_reason) {
+            if (ps.cancelReason) {
               console.log('\n  Cancellation Info:');
-              console.log(`    Cancelled By: ${ps.cancel_by || 'N/A'}`);
-              console.log(`    Reason: ${ps.cancel_reason}`);
-              if (ps.buyer_cancel_reason) {
-                console.log(`    Buyer Reason: ${ps.buyer_cancel_reason}`);
+              console.log(`    Cancelled By: ${ps.cancelBy || 'N/A'}`);
+              console.log(`    Reason: ${ps.cancelReason}`);
+              if (ps.buyerCancelReason) {
+                console.log(`    Buyer Reason: ${ps.buyerCancelReason}`);
               }
             }
           }

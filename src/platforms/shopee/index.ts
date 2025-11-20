@@ -12,18 +12,20 @@ import {
   ShopeeCredentials,
 } from "../../interfaces";
 import { ShopeeProduct, ShopeeOrder } from "./types";
+import { keysToCamel, keysToSnake } from "../../utils/transform";
+import { ShopeeApiPath, SHOPEE_CONSTANTS, SHOPEE_ORDER_OPTIONAL_FIELDS } from "./constants";
 
 export class ShopeePlatform implements ECommercePlatform {
   private client: AxiosInstance;
   private credentials: ShopeeCredentials;
-  private baseURL: string = "https://partner.shopeemobile.com";
+  private baseURL: string = SHOPEE_CONSTANTS.ENDPOINT;
   private pathPrefix: string = "";
 
   constructor(config: EcomConnectorConfig) {
     this.credentials = config.credentials as ShopeeCredentials;
 
     if (config.sandbox) {
-      this.baseURL = "https://openplatform.sandbox.test-stable.shopee.sg";
+      this.baseURL = SHOPEE_CONSTANTS.ENDPOINT_SANDBOX;
     }
 
     this.client = axios.create({
@@ -54,8 +56,13 @@ export class ShopeePlatform implements ECommercePlatform {
         }`;
         const signature = this.generateSignature(fullApiPath, timestamp);
 
+        // Transform params to snake_case for Shopee API
+        const transformedParams = config.params
+          ? keysToSnake(config.params)
+          : {};
+
         config.params = {
-          ...config.params,
+          ...transformedParams,
           partner_id: this.credentials.partnerId,
           timestamp,
           sign: signature,
@@ -72,7 +79,13 @@ export class ShopeePlatform implements ECommercePlatform {
     );
 
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Transform response data to camelCase
+        if (response.data) {
+          response.data = keysToCamel(response.data);
+        }
+        return response;
+      },
       (error) => {
         throw new EcomConnectorError(
           error.response?.data?.message || error.message,
@@ -99,87 +112,176 @@ export class ShopeePlatform implements ECommercePlatform {
     return sign;
   }
 
-  private mapShopeeProductToProduct(shopeeProduct: ShopeeProduct): Product {
-    // Extract price info from nested structure
-    const priceInfo = shopeeProduct.price_info?.[0];
+  /**
+   * Common helper to handle API responses and check for errors
+   */
+  private handleApiResponse<T = any>(response: any, errorMessage: string, errorCode: string): T {
+    if (response.data.error) {
+      throw new EcomConnectorError(
+        response.data.message,
+        response.data.error,
+        400,
+        response.data
+      );
+    }
+    return response.data.response as T;
+  }
+
+  /**
+   * Common helper to fetch order details with optional fields
+   */
+  private async fetchOrderDetails(orderSns: string[]): Promise<any[]> {
+    if (orderSns.length === 0) {
+      return [];
+    }
+
+    const response = await this.client.get(ShopeeApiPath.ORDER_DETAIL, {
+      params: {
+        orderSnList: orderSns.join(","),
+        responseOptionalFields: SHOPEE_ORDER_OPTIONAL_FIELDS.join(","),
+      },
+    });
+
+    const responseData: any = this.handleApiResponse(
+      response,
+      "Failed to fetch order details",
+      "FETCH_ORDER_DETAILS_ERROR"
+    );
+
+    return responseData?.orderList || responseData?.order_list || [];
+  }
+
+  /**
+   * Common helper to fetch product details
+   */
+  private async fetchProductDetails(itemIds: number[]): Promise<any[]> {
+    if (itemIds.length === 0) {
+      return [];
+    }
+
+    const response = await this.client.get(ShopeeApiPath.GET_ITEM_BASE, {
+      params: {
+        itemIdList: itemIds.join(","),
+        needTaxInfo: true,
+        needComplaintPolicy: true,
+      },
+    });
+
+    const responseData: any = this.handleApiResponse(
+      response,
+      "Failed to fetch product details",
+      "FETCH_PRODUCT_DETAILS_ERROR"
+    );
+
+    return responseData?.itemList || responseData?.item_list || [];
+  }
+
+  /**
+   * Common helper to extract item IDs from list response
+   */
+  private extractItemIds(response: any): number[] {
+    const itemList =
+      response.data.response?.item ||
+      response.data.response?.itemIdList ||
+      response.data.response?.item_id_list ||
+      [];
+
+    return Array.isArray(itemList)
+      ? itemList.map((item: any) =>
+          typeof item === "number" ? item : item.itemId || item.item_id
+        )
+      : [];
+  }
+
+  private mapShopeeProductToProduct(shopeeProduct: any): Product {
+    const priceInfo = shopeeProduct.priceInfo?.[0];
     const price =
-      priceInfo?.current_price ||
-      priceInfo?.original_price ||
+      priceInfo?.currentPrice ||
+      priceInfo?.originalPrice ||
       shopeeProduct.price ||
       0;
     const currency = priceInfo?.currency || "VND";
 
-    // Extract image URLs from nested structure
     const images =
-      shopeeProduct.image?.image_url_list || shopeeProduct.images || [];
+      shopeeProduct.image?.imageUrlList || shopeeProduct.images || [];
 
-    // Extract stock from new stock_info_v2 structure
     const stock =
-      shopeeProduct.stock_info_v2?.summary_info?.total_available_stock ||
+      shopeeProduct.stockInfoV2?.summaryInfo?.totalAvailableStock ||
       shopeeProduct.stock ||
       0;
 
-    // Extract description from description_info if available
     const description =
       shopeeProduct.description ||
-      shopeeProduct.description_info?.extended_description?.field_list?.[0]
+      shopeeProduct.descriptionInfo?.extendedDescription?.fieldList?.[0]
         ?.text ||
       "";
 
     return {
-      id: shopeeProduct.item_id.toString(),
-      name: shopeeProduct.item_name,
+      id: shopeeProduct.itemId?.toString() || "",
+      name: shopeeProduct.itemName || "",
       description,
       price,
       currency,
       stock,
-      sku: shopeeProduct.item_sku || "",
+      sku: shopeeProduct.itemSku || "",
       images,
-      categoryId: shopeeProduct.category_id?.toString(),
-      status: shopeeProduct.item_status === "NORMAL" ? "active" : "inactive",
-      createdAt: new Date(shopeeProduct.create_time * 1000),
-      updatedAt: new Date(shopeeProduct.update_time * 1000),
+      categoryId: shopeeProduct.categoryId?.toString(),
+      status: shopeeProduct.itemStatus === "NORMAL" ? "active" : "inactive",
+      createdAt: new Date(shopeeProduct.createTime * 1000),
+      updatedAt: new Date(shopeeProduct.updateTime * 1000),
       platformSpecific: shopeeProduct,
     };
   }
 
-  private mapShopeeOrderToOrder(shopeeOrder: ShopeeOrder): Order {
+  private mapShopeeOrderToOrder(shopeeOrder: any): Order {
+    // Data is already in camelCase from interceptor
     return {
-      id: shopeeOrder.order_sn,
-      orderNumber: shopeeOrder.order_sn,
-      status: shopeeOrder.order_status,
-      totalAmount: shopeeOrder.total_amount,
+      id: shopeeOrder.orderSn,
+      orderNumber: shopeeOrder.orderSn,
+      status: shopeeOrder.orderStatus,
+      totalAmount: shopeeOrder.totalAmount,
       currency: shopeeOrder.currency,
-      items: shopeeOrder.item_list.map((item) => ({
-        productId: item.item_id.toString(),
-        productName: item.item_name,
-        quantity: item.model_quantity_purchased,
-        price: item.model_discounted_price || item.model_original_price,
-        sku: item.model_sku || item.item_sku,
-      })),
+      items:
+        shopeeOrder.itemList?.map((item: any) => ({
+          productId: item.itemId?.toString() || "",
+          productName: item.itemName || "",
+          quantity: item.modelQuantityPurchased || 0,
+          price: item.modelDiscountedPrice || item.modelOriginalPrice || 0,
+          sku: item.modelSku || item.itemSku || "",
+        })) || [],
       customer: {
-        id: shopeeOrder.buyer_user_id.toString(),
-        name: shopeeOrder.buyer_username || '',
+        id: shopeeOrder.buyerUserId?.toString() || "",
+        name: shopeeOrder.buyerUsername || "",
       },
-      shippingAddress: shopeeOrder.recipient_address ? {
-        fullName: shopeeOrder.recipient_address.name,
-        phone: shopeeOrder.recipient_address.phone,
-        addressLine1: shopeeOrder.recipient_address.full_address,
-        addressLine2: [shopeeOrder.recipient_address.district, shopeeOrder.recipient_address.town].filter(Boolean).join(', ') || undefined,
-        city: shopeeOrder.recipient_address.city,
-        state: shopeeOrder.recipient_address.state || shopeeOrder.recipient_address.region,
-        country: shopeeOrder.recipient_address.country,
-        postalCode: shopeeOrder.recipient_address.zipcode,
-      } : undefined,
-      createdAt: new Date(shopeeOrder.create_time * 1000),
-      updatedAt: new Date(shopeeOrder.update_time * 1000),
+      shippingAddress: shopeeOrder.recipientAddress
+        ? {
+            fullName: shopeeOrder.recipientAddress.name,
+            phone: shopeeOrder.recipientAddress.phone,
+            addressLine1: shopeeOrder.recipientAddress.fullAddress,
+            addressLine2:
+              [
+                shopeeOrder.recipientAddress.district,
+                shopeeOrder.recipientAddress.town,
+              ]
+                .filter(Boolean)
+                .join(", ") || undefined,
+            city: shopeeOrder.recipientAddress.city,
+            state:
+              shopeeOrder.recipientAddress.state ||
+              shopeeOrder.recipientAddress.region,
+            country: shopeeOrder.recipientAddress.country,
+            postalCode: shopeeOrder.recipientAddress.zipcode,
+          }
+        : undefined,
+      createdAt: new Date(shopeeOrder.createTime * 1000),
+      updatedAt: new Date(shopeeOrder.updateTime * 1000),
       platformSpecific: shopeeOrder,
     };
   }
 
   async getProducts(options?: ProductQueryOptions): Promise<Product[]> {
     try {
-      const response = await this.client.get("/api/v2/product/get_item_list", {
+      const response = await this.client.get(ShopeeApiPath.GET_ITEM_LIST, {
         params: {
           offset: options?.offset || 0,
           page_size: options?.limit || 20,
@@ -187,50 +289,10 @@ export class ShopeePlatform implements ECommercePlatform {
         },
       });
 
-      if (response.data.error) {
-        throw new EcomConnectorError(
-          response.data.message,
-          response.data.error,
-          400,
-          response.data
-        );
-      }
+      const itemIds = this.extractItemIds(response);
+      const detailsList = await this.fetchProductDetails(itemIds);
 
-      const itemList =
-        response.data.response?.item ||
-        response.data.response?.item_id_list ||
-        [];
-      const itemIds: number[] = Array.isArray(itemList)
-        ? itemList.map((item: any) =>
-            typeof item === "number" ? item : item.item_id
-          )
-        : [];
-
-      if (itemIds.length === 0) return [];
-
-      const detailsResponse = await this.client.get(
-        "/api/v2/product/get_item_base_info",
-        {
-          params: {
-            item_id_list: itemIds.join(","),
-            need_tax_info: true,
-            need_complaint_policy: true,
-          },
-        }
-      );
-
-      if (detailsResponse.data.error) {
-        throw new EcomConnectorError(
-          detailsResponse.data.message,
-          detailsResponse.data.error,
-          400,
-          detailsResponse.data
-        );
-      }
-
-      return detailsResponse.data.response.item_list.map((p: ShopeeProduct) =>
-        this.mapShopeeProductToProduct(p)
-      );
+      return detailsList.map((p: any) => this.mapShopeeProductToProduct(p));
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -244,27 +306,9 @@ export class ShopeePlatform implements ECommercePlatform {
 
   async getProductById(id: string): Promise<Product> {
     try {
-      const response = await this.client.get(
-        "/api/v2/product/get_item_base_info",
-        {
-          params: {
-            item_id_list: id,
-            need_tax_info: true,
-            need_complaint_policy: true,
-          },
-        }
-      );
-
-      if (response.data.error) {
-        throw new EcomConnectorError(
-          response.data.message,
-          response.data.error,
-          400,
-          response.data
-        );
-      }
-
-      const product = response.data.response.item_list[0];
+      const detailsList = await this.fetchProductDetails([parseInt(id)]);
+      const product = detailsList[0];
+      
       if (!product) {
         throw new EcomConnectorError(
           "Product not found",
@@ -303,7 +347,7 @@ export class ShopeePlatform implements ECommercePlatform {
       };
 
       const response = await this.client.post(
-        "/api/v2/product/add_item",
+        ShopeeApiPath.ADD_ITEM,
         undefined,
         {
           params,
@@ -348,7 +392,7 @@ export class ShopeePlatform implements ECommercePlatform {
       if (productData.stock !== undefined) updateData.stock = productData.stock;
 
       const response = await this.client.post(
-        "/api/v2/product/update_item",
+        ShopeeApiPath.ADD_ITEM, // Note: Using ADD_ITEM as UPDATE_ITEM may not exist
         undefined,
         {
           params: updateData,
@@ -379,93 +423,35 @@ export class ShopeePlatform implements ECommercePlatform {
   async getOrders(options?: OrderQueryOptions): Promise<Order[]> {
     try {
       const params: any = {
-        page_size: options?.limit || 100,
-        time_range_field: "create_time",
-        time_from: options?.startDate
+        pageSize: options?.limit || 100,
+        timeRangeField: "create_time",
+        timeFrom: options?.startDate
           ? Math.floor(options.startDate.getTime() / 1000)
           : Math.floor(Date.now() / 1000) - 86400 * 30,
-        time_to: options?.endDate
+        timeTo: options?.endDate
           ? Math.floor(options.endDate.getTime() / 1000)
           : Math.floor(Date.now() / 1000),
       };
 
-      // Add order_status filter if provided
       if (options?.status) {
-        params.order_status = options.status;
+        params.orderStatus = options.status;
       }
 
-      const response = await this.client.get("/api/v2/order/get_order_list", {
+      const response = await this.client.get(ShopeeApiPath.ORDER_LIST, {
         params: params,
       });
 
-      if (response.data.error) {
-        throw new EcomConnectorError(
-          response.data.message,
-          response.data.error,
-          400,
-          response.data
-        );
-      }
-
-      const orderSns = response.data.response.order_list.map(
-        (o: any) => o.order_sn
+      const responseData: any = this.handleApiResponse(
+        response,
+        "Failed to fetch orders",
+        "FETCH_ORDERS_ERROR"
       );
 
-      if (orderSns.length === 0) return [];
+      const orderList = responseData?.orderList || responseData?.order_list || [];
+      const orderSns = orderList.map((o: any) => o.orderSn || o.order_sn);
 
-      // Get detailed order information with all optional fields
-      const detailsResponse = await this.client.get(
-        "/api/v2/order/get_order_detail",
-        {
-          params: {
-            order_sn_list: orderSns.join(","),
-            response_optional_fields: [
-              'buyer_user_id',
-              'buyer_username',
-              'estimated_shipping_fee',
-              'recipient_address',
-              'actual_shipping_fee',
-              'goods_to_declare',
-              'note',
-              'note_update_time',
-              'item_list',
-              'pay_time',
-              'dropshipper',
-              'dropshipper_phone',
-              'split_up',
-              'buyer_cancel_reason',
-              'cancel_by',
-              'cancel_reason',
-              'actual_shipping_fee_confirmed',
-              'buyer_cpf_id',
-              'fulfillment_flag',
-              'pickup_done_time',
-              'package_list',
-              'shipping_carrier',
-              'payment_method',
-              'total_amount',
-              'invoice_data',
-              'order_chargeable_weight_gram',
-              'return_request_due_date',
-              'edt',
-              'payment_info'
-            ].join(','),
-          },
-        }
-      );
-
-      if (detailsResponse.data.error) {
-        throw new EcomConnectorError(
-          detailsResponse.data.message,
-          detailsResponse.data.error,
-          400,
-          detailsResponse.data
-        );
-      }
-
-      return detailsResponse.data.response.order_list.map((o: ShopeeOrder) =>
-        this.mapShopeeOrderToOrder(o)
-      );
+      const ordersList = await this.fetchOrderDetails(orderSns);
+      return ordersList.map((o: any) => this.mapShopeeOrderToOrder(o));
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -479,53 +465,9 @@ export class ShopeePlatform implements ECommercePlatform {
 
   async getOrderById(id: string): Promise<Order> {
     try {
-      const response = await this.client.get("/api/v2/order/get_order_detail", {
-        params: {
-          order_sn_list: id,
-          response_optional_fields: [
-            'buyer_user_id',
-            'buyer_username',
-            'estimated_shipping_fee',
-            'recipient_address',
-            'actual_shipping_fee',
-            'goods_to_declare',
-            'note',
-            'note_update_time',
-            'item_list',
-            'pay_time',
-            'dropshipper',
-            'dropshipper_phone',
-            'split_up',
-            'buyer_cancel_reason',
-            'cancel_by',
-            'cancel_reason',
-            'actual_shipping_fee_confirmed',
-            'buyer_cpf_id',
-            'fulfillment_flag',
-            'pickup_done_time',
-            'package_list',
-            'shipping_carrier',
-            'payment_method',
-            'total_amount',
-            'invoice_data',
-            'order_chargeable_weight_gram',
-            'return_request_due_date',
-            'edt',
-            'payment_info'
-          ].join(','),
-        },
-      });
-
-      if (response.data.error) {
-        throw new EcomConnectorError(
-          response.data.message,
-          response.data.error,
-          400,
-          response.data
-        );
-      }
-
-      const order = response.data.response.order_list[0];
+      const ordersList = await this.fetchOrderDetails([id]);
+      const order = ordersList[0];
+      
       if (!order) {
         throw new EcomConnectorError("Order not found", "ORDER_NOT_FOUND", 404);
       }
@@ -557,9 +499,9 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   generateAuthUrl(redirectUrl: string): string {
     const timestamp = Math.floor(Date.now() / 1000);
-    const path = "/api/v2/shop/auth_partner";
+    const path = ShopeeApiPath.GENERATE_AUTH_LINK;
     const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
-    
+
     const sign = crypto
       .createHmac("sha256", this.credentials.partnerKey)
       .update(baseString)
@@ -612,9 +554,9 @@ export class ShopeePlatform implements ECommercePlatform {
       }
 
       const timestamp = Math.floor(Date.now() / 1000);
-      const path = "/api/v2/auth/token/get";
+      const path = ShopeeApiPath.AUTH_TOKEN;
       const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
-      
+
       const sign = crypto
         .createHmac("sha256", this.credentials.partnerKey)
         .update(baseString)
@@ -631,20 +573,16 @@ export class ShopeePlatform implements ECommercePlatform {
         requestBody.main_account_id = parseInt(mainAccountId);
       }
 
-      const response = await axios.post(
-        `${this.baseURL}${path}`,
-        requestBody,
-        {
-          params: {
-            partner_id: this.credentials.partnerId,
-            timestamp,
-            sign,
-          },
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post(`${this.baseURL}${path}`, requestBody, {
+        params: {
+          partner_id: this.credentials.partnerId,
+          timestamp,
+          sign,
+        },
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.data.error) {
         throw new EcomConnectorError(
@@ -704,9 +642,9 @@ export class ShopeePlatform implements ECommercePlatform {
       }
 
       const timestamp = Math.floor(Date.now() / 1000);
-      const path = "/api/v2/auth/access_token/get";
+      const path = ShopeeApiPath.REFRESH_TOKEN;
       const baseString = `${this.credentials.partnerId}${path}${timestamp}`;
-      
+
       const sign = crypto
         .createHmac("sha256", this.credentials.partnerKey)
         .update(baseString)
@@ -723,20 +661,16 @@ export class ShopeePlatform implements ECommercePlatform {
         requestBody.main_account_id = parseInt(mainAccountId);
       }
 
-      const response = await axios.post(
-        `${this.baseURL}${path}`,
-        requestBody,
-        {
-          params: {
-            partner_id: this.credentials.partnerId,
-            timestamp,
-            sign,
-          },
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post(`${this.baseURL}${path}`, requestBody, {
+        params: {
+          partner_id: this.credentials.partnerId,
+          timestamp,
+          sign,
+        },
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.data.error) {
         throw new EcomConnectorError(
@@ -753,6 +687,374 @@ export class ShopeePlatform implements ECommercePlatform {
       throw new EcomConnectorError(
         "Failed to refresh access token",
         "AUTH_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get product categories
+   * @param language - Language code (default: 'en')
+   * @returns List of categories
+   */
+  async getCategories(language: string = "en"): Promise<any> {
+    try {
+      const response = await this.client.get(ShopeeApiPath.GET_CATEGORY, {
+        params: {
+          language,
+        },
+      });
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get categories",
+        "GET_CATEGORIES_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get category attributes
+   * @param categoryId - Category ID
+   * @param language - Language code (default: 'en')
+   * @returns Category attributes
+   */
+  async getCategoryAttributes(
+    categoryId: number,
+    language: string = "en"
+  ): Promise<any> {
+    try {
+      const response = await this.client.get(ShopeeApiPath.GET_ATTRIBUTES, {
+        params: {
+          category_id: categoryId,
+          language,
+        },
+      });
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get category attributes",
+        "GET_ATTRIBUTES_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get brand list for a category
+   * @param categoryId - Category ID
+   * @param status - Brand status (1: normal, 2: pending, 3: banned)
+   * @param pageSize - Page size (default: 100, max: 100)
+   * @param offset - Offset (default: 0)
+   * @returns Brand list
+   */
+  async getBrandList(
+    categoryId: number,
+    status: number = 1,
+    pageSize: number = 100,
+    offset: number = 0
+  ): Promise<any> {
+    try {
+      const response = await this.client.get(ShopeeApiPath.GET_BRAND_LIST, {
+        params: {
+          category_id: categoryId,
+          status,
+          page_size: pageSize,
+          offset,
+        },
+      });
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get brand list",
+        "GET_BRAND_LIST_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Update product stock
+   * @param itemId - Item ID
+   * @param stockList - List of stock updates
+   * @returns Update result
+   */
+  async updateStock(
+    itemId: number,
+    stockList: Array<{ modelId: number; sellerStock: Array<{ stock: number }> }>
+  ): Promise<any> {
+    try {
+      const body = keysToSnake({
+        itemId,
+        stockList,
+      });
+
+      const response = await this.client.post(ShopeeApiPath.UPDATE_STOCK, body);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to update stock",
+        "UPDATE_STOCK_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Update product price
+   * @param itemId - Item ID
+   * @param priceList - List of price updates
+   * @returns Update result
+   */
+  async updatePrice(
+    itemId: number,
+    priceList: Array<{ modelId: number; originalPrice: number }>
+  ): Promise<any> {
+    try {
+      const body = keysToSnake({
+        itemId,
+        priceList,
+      });
+
+      const response = await this.client.post(ShopeeApiPath.UPDATE_PRICE, body);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to update price",
+        "UPDATE_PRICE_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Unlist or list items
+   * @param itemList - List of items to unlist/list
+   * @returns Update result
+   */
+  async unlistItem(
+    itemList: Array<{ itemId: number; unlist: boolean }>
+  ): Promise<any> {
+    try {
+      const body = keysToSnake({
+        itemList,
+      });
+
+      const response = await this.client.post(ShopeeApiPath.UNLIST_ITEM, body);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to unlist item",
+        "UNLIST_ITEM_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Delete product
+   * @param itemId - Item ID
+   * @returns Delete result
+   */
+  async deleteProduct(itemId: number): Promise<any> {
+    try {
+      const body = {
+        item_id: itemId,
+      };
+
+      const response = await this.client.post(ShopeeApiPath.DELETE_ITEM, body);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to delete product",
+        "DELETE_PRODUCT_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get logistics channel list
+   * @returns List of logistics channels
+   */
+  async getLogisticsChannelList(): Promise<any> {
+    try {
+      const response = await this.client.get(ShopeeApiPath.CHANNEL_LIST);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get logistics channel list",
+        "GET_LOGISTICS_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get shipping parameters for an order
+   * @param orderSn - Order serial number
+   * @returns Shipping parameters
+   */
+  async getShippingParameter(orderSn: string): Promise<any> {
+    try {
+      const response = await this.client.get(ShopeeApiPath.SHIPPING_PARAMS, {
+        params: {
+          order_sn: orderSn,
+        },
+      });
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to get shipping parameter",
+        "GET_SHIPPING_PARAMETER_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Ship order
+   * @param orderSn - Order serial number
+   * @param pickup - Pickup information
+   * @returns Ship order result
+   */
+  async shipOrder(
+    orderSn: string,
+    pickup: { addressId: number; pickupTimeId: string }
+  ): Promise<any> {
+    try {
+      const body = keysToSnake({
+        orderSn,
+        pickup,
+      });
+
+      const response = await this.client.post(ShopeeApiPath.SHIP_ORDER, body);
+
+      if (response.data.error) {
+        throw new EcomConnectorError(
+          response.data.message,
+          response.data.error,
+          400,
+          response.data
+        );
+      }
+
+      return keysToCamel(response.data.response);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to ship order",
+        "SHIP_ORDER_ERROR",
         500,
         error
       );

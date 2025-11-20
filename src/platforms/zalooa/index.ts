@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance } from "axios";
 import {
   ECommercePlatform,
   Product,
@@ -9,22 +9,23 @@ import {
   EcomConnectorConfig,
   EcomConnectorError,
   ZaloOACredentials,
-} from '../../interfaces';
-import { ZaloOAProduct, ZaloOAOrder } from './types';
+} from "../../interfaces";
+import { ZaloOAProduct, ZaloOAOrder } from "./types";
+import { ZALO_CONSTANTS } from "./constants";
 
 export class ZaloOAPlatform implements ECommercePlatform {
   private client: AxiosInstance;
   private credentials: ZaloOACredentials;
-  private baseURL: string = 'https://openapi.zalo.me/v2.0';
+  private baseURL: string = ZALO_CONSTANTS.ENDPOINT;
 
   constructor(config: EcomConnectorConfig) {
     this.credentials = config.credentials as ZaloOACredentials;
-    
+
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: config.timeout || 30000,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
@@ -35,7 +36,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
     this.client.interceptors.request.use(
       (config) => {
         if (this.credentials.accessToken) {
-          config.headers['access_token'] = this.credentials.accessToken;
+          config.headers["access_token"] = this.credentials.accessToken;
         }
         return config;
       },
@@ -47,7 +48,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       (error) => {
         throw new EcomConnectorError(
           error.response?.data?.message || error.message,
-          error.response?.data?.error?.toString() || 'ZALO_ERROR',
+          error.response?.data?.error?.toString() || "ZALO_ERROR",
           error.response?.status,
           error.response?.data
         );
@@ -61,10 +62,10 @@ export class ZaloOAPlatform implements ECommercePlatform {
       name: zaloProduct.name,
       description: zaloProduct.description,
       price: zaloProduct.price,
-      currency: 'VND',
+      currency: "VND",
       stock: 0, // Zalo OA doesn't provide stock info in basic response
       images: zaloProduct.images,
-      status: zaloProduct.status === 1 ? 'active' : 'inactive',
+      status: zaloProduct.status === 1 ? "active" : "inactive",
       createdAt: new Date(zaloProduct.created_time * 1000),
       updatedAt: new Date(zaloProduct.updated_time * 1000),
       platformSpecific: zaloProduct,
@@ -77,8 +78,8 @@ export class ZaloOAPlatform implements ECommercePlatform {
       orderNumber: zaloOrder.order_code,
       status: this.mapZaloOrderStatus(zaloOrder.status),
       totalAmount: zaloOrder.total_amount,
-      currency: 'VND',
-      items: zaloOrder.items.map(item => ({
+      currency: "VND",
+      items: zaloOrder.items.map((item) => ({
         productId: item.product_id,
         productName: item.product_name,
         quantity: item.quantity,
@@ -96,18 +97,18 @@ export class ZaloOAPlatform implements ECommercePlatform {
 
   private mapZaloOrderStatus(status: number): string {
     const statusMap: { [key: number]: string } = {
-      0: 'PENDING',
-      1: 'CONFIRMED',
-      2: 'SHIPPING',
-      3: 'COMPLETED',
-      4: 'CANCELLED',
+      0: "PENDING",
+      1: "CONFIRMED",
+      2: "SHIPPING",
+      3: "COMPLETED",
+      4: "CANCELLED",
     };
-    return statusMap[status] || 'UNKNOWN';
+    return statusMap[status] || "UNKNOWN";
   }
 
   async getProducts(options?: ProductQueryOptions): Promise<Product[]> {
     try {
-      const response = await this.client.get('/oa/product/list', {
+      const response = await this.client.get("/oa/product/list", {
         params: {
           offset: options?.offset || 0,
           limit: options?.limit || 20,
@@ -117,7 +118,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -129,8 +130,8 @@ export class ZaloOAPlatform implements ECommercePlatform {
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
-        'Failed to fetch products from Zalo OA',
-        'FETCH_PRODUCTS_ERROR',
+        "Failed to fetch products from Zalo OA",
+        "FETCH_PRODUCTS_ERROR",
         500,
         error
       );
@@ -146,7 +147,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -157,7 +158,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
         `Failed to fetch product ${id} from Zalo OA`,
-        'FETCH_PRODUCT_ERROR',
+        "FETCH_PRODUCT_ERROR",
         500,
         error
       );
@@ -166,7 +167,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
 
   async createProduct(productData: ProductInput): Promise<Product> {
     try {
-      const response = await this.client.post('/oa/product/create', {
+      const response = await this.client.post("/oa/product/create", {
         name: productData.name,
         description: productData.description,
         price: productData.price,
@@ -177,7 +178,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -187,8 +188,8 @@ export class ZaloOAPlatform implements ECommercePlatform {
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
-        'Failed to create product on Zalo OA',
-        'CREATE_PRODUCT_ERROR',
+        "Failed to create product on Zalo OA",
+        "CREATE_PRODUCT_ERROR",
         500,
         error
       );
@@ -200,7 +201,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
     productData: Partial<ProductInput>
   ): Promise<Product> {
     try {
-      const response = await this.client.post('/oa/product/update', {
+      const response = await this.client.post("/oa/product/update", {
         product_id: id,
         ...productData,
         ...productData.platformSpecific,
@@ -209,7 +210,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -220,7 +221,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
         `Failed to update product ${id} on Zalo OA`,
-        'UPDATE_PRODUCT_ERROR',
+        "UPDATE_PRODUCT_ERROR",
         500,
         error
       );
@@ -229,7 +230,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
 
   async getOrders(options?: OrderQueryOptions): Promise<Order[]> {
     try {
-      const response = await this.client.get('/oa/order/list', {
+      const response = await this.client.get("/oa/order/list", {
         params: {
           offset: options?.offset || 0,
           limit: options?.limit || 20,
@@ -239,7 +240,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -251,8 +252,8 @@ export class ZaloOAPlatform implements ECommercePlatform {
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
-        'Failed to fetch orders from Zalo OA',
-        'FETCH_ORDERS_ERROR',
+        "Failed to fetch orders from Zalo OA",
+        "FETCH_ORDERS_ERROR",
         500,
         error
       );
@@ -261,14 +262,14 @@ export class ZaloOAPlatform implements ECommercePlatform {
 
   async getOrderById(id: string): Promise<Order> {
     try {
-      const response = await this.client.get('/oa/order/detail', {
+      const response = await this.client.get("/oa/order/detail", {
         params: { order_id: id },
       });
 
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -279,7 +280,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
         `Failed to fetch order ${id} from Zalo OA`,
-        'FETCH_ORDER_ERROR',
+        "FETCH_ORDER_ERROR",
         500,
         error
       );
@@ -289,7 +290,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
   async updateOrderStatus(id: string, status: string): Promise<Order> {
     try {
       const statusCode = this.reverseMapOrderStatus(status);
-      const response = await this.client.post('/oa/order/update', {
+      const response = await this.client.post("/oa/order/update", {
         order_id: id,
         status: statusCode,
       });
@@ -297,7 +298,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (response.data.error !== 0) {
         throw new EcomConnectorError(
           response.data.message,
-          'ZALO_API_ERROR',
+          "ZALO_API_ERROR",
           400,
           response.data
         );
@@ -308,7 +309,7 @@ export class ZaloOAPlatform implements ECommercePlatform {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
         `Failed to update order ${id} status on Zalo OA`,
-        'UPDATE_ORDER_ERROR',
+        "UPDATE_ORDER_ERROR",
         500,
         error
       );
