@@ -363,7 +363,8 @@ export class ShopeePlatform implements ECommercePlatform {
         );
       }
 
-      return this.getProductById(response.data.response.item_id.toString());
+      // Response is already transformed to camelCase by interceptor
+      return this.getProductById(response.data.response.itemId.toString());
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -529,12 +530,12 @@ export class ShopeePlatform implements ECommercePlatform {
     shopId?: string,
     mainAccountId?: string
   ): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expire_in: number;
-    shop_id?: number;
-    main_account_id?: number;
-    partner_id: number;
+    accessToken: string;
+    refreshToken: string;
+    expireIn: number;
+    shopId?: number;
+    mainAccountId?: number;
+    partnerId: number;
   }> {
     try {
       if (!shopId && !mainAccountId) {
@@ -593,7 +594,7 @@ export class ShopeePlatform implements ECommercePlatform {
         );
       }
 
-      return response.data;
+      return keysToCamel(response.data);
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -617,12 +618,12 @@ export class ShopeePlatform implements ECommercePlatform {
     shopId?: string,
     mainAccountId?: string
   ): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expire_in: number;
-    shop_id?: number;
-    main_account_id?: number;
-    partner_id: number;
+    accessToken: string;
+    refreshToken: string;
+    expireIn: number;
+    shopId?: number;
+    mainAccountId?: number;
+    partnerId: number;
   }> {
     try {
       if (!shopId && !mainAccountId) {
@@ -681,7 +682,7 @@ export class ShopeePlatform implements ECommercePlatform {
         );
       }
 
-      return response.data;
+      return keysToCamel(response.data);
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(

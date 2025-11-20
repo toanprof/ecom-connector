@@ -59,28 +59,28 @@ async function getAccessToken() {
 
     // Get access token
     const tokenData = await connector.getAccessToken(authCode, targetShopId);
+    console.log("🚀 ~ tokenData:", tokenData)
 
     console.log('✅ SUCCESS!\n');
     console.log('════════════════════════════════════════');
     console.log('Token Information:');
     console.log('════════════════════════════════════════');
-    console.log('Access Token:', tokenData.access_token);
-    console.log('Refresh Token:', tokenData.refresh_token);
-    console.log('Expires In:', tokenData.expire_in, 'seconds');
-    console.log('Shop ID:', tokenData.shop_id);
-    console.log('Partner ID:', tokenData.partner_id);
-    console.log('════════════════════════════════════════\n');
-
+    console.log('Access Token:', tokenData.accessToken);
+    console.log('Refresh Token:', tokenData.refreshToken);
+    console.log('Expires In:', tokenData.expireIn, 'seconds');
+    console.log('Shop ID:', tokenData.shopId);
+    console.log('Partner ID:', tokenData.partnerId);
+    console.log("════════════════════════════════════════\n");
     // Calculate expiration
-    const expiresAt = new Date(Date.now() + tokenData.expire_in * 1000);
+    const expiresAt = new Date(Date.now() + tokenData.expireIn * 1000);
     console.log('Token expires at:', expiresAt.toISOString());
     console.log();
 
     console.log('📝 Copy these to your .env file:\n');
-    console.log(`SHOPEE_PARTNER_ID=${tokenData.partner_id}`);
-    console.log(`SHOPEE_SHOP_ID=${tokenData.shop_id}`);
-    console.log(`SHOPEE_ACCESS_TOKEN=${tokenData.access_token}`);
-    console.log(`SHOPEE_REFRESH_TOKEN=${tokenData.refresh_token}`);
+    console.log(`SHOPEE_PARTNER_ID=${tokenData.partnerId}`);
+    console.log(`SHOPEE_SHOP_ID=${tokenData.shopId}`);
+    console.log(`SHOPEE_ACCESS_TOKEN=${tokenData.accessToken}`);
+    console.log(`SHOPEE_REFRESH_TOKEN=${tokenData.refreshToken}`);
     console.log('\n');
 
     console.log('Next steps:');
@@ -95,23 +95,23 @@ async function getAccessToken() {
 
     try {
       const refreshedData = await connector.refreshAccessToken(
-        tokenData.refresh_token,
+        tokenData.refreshToken,
         targetShopId
       );
 
       console.log('✅ Refresh successful!\n');
-      console.log('New Access Token:', refreshedData.access_token);
-      console.log('New Refresh Token:', refreshedData.refresh_token);
-      console.log('Expires In:', refreshedData.expire_in, 'seconds');
+      console.log('New Access Token:', refreshedData.accessToken);
+      console.log('New Refresh Token:', refreshedData.refreshToken);
+      console.log('Expires In:', refreshedData.expireIn, 'seconds');
       console.log();
 
-      const newExpiresAt = new Date(Date.now() + refreshedData.expire_in * 1000);
+      const newExpiresAt = new Date(Date.now() + refreshedData.expireIn * 1000);
       console.log('New token expires at:', newExpiresAt.toISOString());
       console.log('\n');
 
       console.log('📝 Updated tokens for .env:\n');
-      console.log(`SHOPEE_ACCESS_TOKEN=${refreshedData.access_token}`);
-      console.log(`SHOPEE_REFRESH_TOKEN=${refreshedData.refresh_token}`);
+      console.log(`SHOPEE_ACCESS_TOKEN=${refreshedData.accessToken}`);
+      console.log(`SHOPEE_REFRESH_TOKEN=${refreshedData.refreshToken}`);
       console.log('\n');
 
     } catch (refreshError) {
@@ -123,16 +123,16 @@ async function getAccessToken() {
   } catch (error) {
     console.error('❌ ERROR!\n');
     console.error('Message:', error.message);
-    
+
     if (error.code) {
       console.error('Error Code:', error.code);
     }
-    
+
     if (error.platformError) {
       console.error('\nPlatform Error Details:');
       console.error(JSON.stringify(error.platformError, null, 2));
     }
-    
+
     console.log('\n');
     console.log('Possible causes:');
     console.log('  1. Auth code has expired (can only be used once)');

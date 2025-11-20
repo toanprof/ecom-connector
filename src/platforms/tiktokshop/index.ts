@@ -219,7 +219,8 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return this.getProductById(response.data.data.product_id);
+      // Response is already transformed to camelCase by interceptor
+      return this.getProductById(response.data.data.productId);
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(

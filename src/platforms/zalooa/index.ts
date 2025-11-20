@@ -12,6 +12,7 @@ import {
 } from "../../interfaces";
 import { ZaloOAProduct, ZaloOAOrder } from "./types";
 import { ZALO_CONSTANTS } from "./constants";
+import { keysToCamel } from "../../utils/transform";
 
 export class ZaloOAPlatform implements ECommercePlatform {
   private client: AxiosInstance;
@@ -44,7 +45,13 @@ export class ZaloOAPlatform implements ECommercePlatform {
     );
 
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Transform response data to camelCase
+        if (response.data) {
+          response.data = keysToCamel(response.data);
+        }
+        return response;
+      },
       (error) => {
         throw new EcomConnectorError(
           error.response?.data?.message || error.message,
@@ -184,7 +191,8 @@ export class ZaloOAPlatform implements ECommercePlatform {
         );
       }
 
-      return this.getProductById(response.data.data.product_id);
+      // Response is already transformed to camelCase by interceptor
+      return this.getProductById(response.data.data.productId);
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(

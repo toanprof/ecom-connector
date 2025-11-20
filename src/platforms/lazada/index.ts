@@ -248,14 +248,15 @@ export class LazadaPlatform implements ECommercePlatform {
 
       if (response.data.code !== "0") {
         throw new EcomConnectorError(
-          response.data.message || "Failed to create product",
+          response.data.message,
           response.data.code,
           400,
           response.data
         );
       }
 
-      return this.getProductById(response.data.data.item_id.toString());
+      // Response is already transformed to camelCase by interceptor
+      return this.getProductById(response.data.data.itemId.toString());
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(

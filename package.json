@@ -1,6 +1,6 @@
 {
   "name": "ecom-connector",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A unified abstraction layer for integrating with multiple e-commerce platforms (Zalo OA, TikTok Shop, Shopee, Lazada)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/toanprof/ecom-connector.git"
+    "url": "git+https://github.com/toanprof/ecom-connector.git"
   },
   "bugs": {
     "url": "https://github.com/toanprof/ecom-connector/issues"
