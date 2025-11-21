@@ -32,7 +32,7 @@ export interface ProductQueryOptions {
   limit?: number;
   offset?: number;
   page?: number;
-  status?: string;
+  status?: string | string[]; // Single status or multiple statuses (e.g., ['NORMAL', 'BANNED'])
   categoryId?: string;
   search?: string;
 }
@@ -137,6 +137,28 @@ export interface ECommercePlatform {
   getProducts(options?: ProductQueryOptions): Promise<Product[]>;
 
   /**
+   * Get products with pagination info (Shopee only)
+   * @returns Products with pagination metadata
+   */
+  getProductsWithPagination?(options?: ProductQueryOptions): Promise<{
+    products: Product[];
+    totalCount: number;
+    hasNextPage: boolean;
+    nextOffset: number;
+  }>;
+
+  /**
+   * Get all products with automatic pagination (Shopee only)
+   * @param options - Query options
+   * @param maxItems - Maximum items to fetch (default: no limit)
+   * @returns All products
+   */
+  getAllProducts?(
+    options?: { status?: string },
+    maxItems?: number
+  ): Promise<Product[]>;
+
+  /**
    * Get a single product by ID
    */
   getProductById(id: string): Promise<Product>;
@@ -158,6 +180,27 @@ export interface ECommercePlatform {
    * Get a list of orders
    */
   getOrders(options?: OrderQueryOptions): Promise<Order[]>;
+
+  /**
+   * Get orders with pagination info (Shopee only)
+   * @returns Orders with pagination metadata
+   */
+  getOrdersWithPagination?(options?: OrderQueryOptions): Promise<{
+    orders: Order[];
+    more: boolean;
+    nextCursor?: string;
+  }>;
+
+  /**
+   * Get all orders with automatic pagination (Shopee only)
+   * @param options - Query options
+   * @param maxItems - Maximum items to fetch (default: no limit)
+   * @returns All orders
+   */
+  getAllOrders?(
+    options?: OrderQueryOptions,
+    maxItems?: number
+  ): Promise<Order[]>;
 
   /**
    * Get a single order by ID

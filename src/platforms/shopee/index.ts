@@ -13,7 +13,11 @@ import {
 } from "../../interfaces";
 import { ShopeeProduct, ShopeeOrder } from "./types";
 import { keysToCamel, keysToSnake } from "../../utils/transform";
-import { ShopeeApiPath, SHOPEE_CONSTANTS, SHOPEE_ORDER_OPTIONAL_FIELDS } from "./constants";
+import {
+  ShopeeApiPath,
+  SHOPEE_CONSTANTS,
+  SHOPEE_ORDER_OPTIONAL_FIELDS,
+} from "./constants";
 
 export class ShopeePlatform implements ECommercePlatform {
   private client: AxiosInstance;
@@ -33,6 +37,9 @@ export class ShopeePlatform implements ECommercePlatform {
       timeout: config.timeout || 30000,
       headers: {
         "Content-Type": "application/json",
+      },
+      paramsSerializer: {
+        indexes: null, // This ensures array params are serialized as param=val1&param=val2
       },
     });
 
@@ -115,7 +122,11 @@ export class ShopeePlatform implements ECommercePlatform {
   /**
    * Common helper to handle API responses and check for errors
    */
-  private handleApiResponse<T = any>(response: any, errorMessage: string, errorCode: string): T {
+  private handleApiResponse<T = any>(
+    response: any,
+    errorMessage: string,
+    errorCode: string
+  ): T {
     if (response.data.error) {
       throw new EcomConnectorError(
         response.data.message,
@@ -281,12 +292,20 @@ export class ShopeePlatform implements ECommercePlatform {
 
   async getProducts(options?: ProductQueryOptions): Promise<Product[]> {
     try {
+      const params: any = {
+        offset: options?.offset || 0,
+        page_size: options?.limit || 20,
+      };
+
+      // Support multiple status: item_status can be string or array
+      if (options?.status) {
+        params.item_status = options.status;
+      } else {
+        params.item_status = "NORMAL";
+      }
+
       const response = await this.client.get(ShopeeApiPath.GET_ITEM_LIST, {
-        params: {
-          offset: options?.offset || 0,
-          page_size: options?.limit || 20,
-          item_status: options?.status || "NORMAL",
-        },
+        params,
       });
 
       const itemIds = this.extractItemIds(response);
@@ -304,11 +323,126 @@ export class ShopeePlatform implements ECommercePlatform {
     }
   }
 
+  /**
+   * Get products with pagination info
+   * @param options - Query options with offset and limit
+   * @returns Products with pagination metadata
+   */
+  async getProductsWithPagination(options?: ProductQueryOptions): Promise<{
+    products: Product[];
+    totalCount: number;
+    hasNextPage: boolean;
+    nextOffset: number;
+  }> {
+    try {
+      const params: any = {
+        offset: options?.offset || 0,
+        page_size: options?.limit || 20,
+      };
+
+      // Support multiple status: item_status can be string or array
+      if (options?.status) {
+        params.item_status = options.status;
+      } else {
+        params.item_status = "NORMAL";
+      }
+
+      const response = await this.client.get(ShopeeApiPath.GET_ITEM_LIST, {
+        params,
+      });
+
+      const responseData: any = this.handleApiResponse(
+        response,
+        "Failed to fetch products",
+        "FETCH_PRODUCTS_ERROR"
+      );
+
+      const itemIds = this.extractItemIds(response);
+      const detailsList = await this.fetchProductDetails(itemIds);
+      const products = detailsList.map((p: any) =>
+        this.mapShopeeProductToProduct(p)
+      );
+
+      return {
+        products,
+        totalCount: responseData.totalCount || 0,
+        hasNextPage: responseData.hasNextPage || false,
+        nextOffset: responseData.nextOffset || 0,
+      };
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to fetch products from Shopee",
+        "FETCH_PRODUCTS_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get all products with automatic pagination
+   * @param options - Query options (status filter: string or array)
+   * @param maxItems - Maximum items to fetch (default: no limit)
+   * @returns All products
+   * @example
+   * // Single status
+   * getAllProducts({ status: 'NORMAL' })
+   * 
+   * // Multiple statuses
+   * getAllProducts({ status: ['NORMAL', 'BANNED'] })
+   */
+  async getAllProducts(
+    options?: { status?: string | string[] },
+    maxItems?: number
+  ): Promise<Product[]> {
+    try {
+      const allProducts: Product[] = [];
+      let offset = 0;
+      const pageSize = 50; // Shopee max is 100, using 50 for safety
+      let hasNextPage = true;
+
+      while (hasNextPage) {
+        const result = await this.getProductsWithPagination({
+          offset,
+          limit: pageSize,
+          ...(options?.status && { status: options.status }),
+        });
+
+        allProducts.push(...result.products);
+
+        hasNextPage = result.hasNextPage;
+        offset = result.nextOffset;
+
+        // Check if we've reached the max items limit
+        if (maxItems && allProducts.length >= maxItems) {
+          return allProducts.slice(0, maxItems);
+        }
+
+        // Safety check to prevent infinite loops
+        if (allProducts.length >= 10000) {
+          console.warn("Reached safety limit of 10,000 products");
+          break;
+        }
+      }
+
+      return allProducts;
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to fetch all products from Shopee",
+        "FETCH_ALL_PRODUCTS_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
   async getProductById(id: string): Promise<Product> {
     try {
       const detailsList = await this.fetchProductDetails([parseInt(id)]);
       const product = detailsList[0];
-      
+
       if (!product) {
         throw new EcomConnectorError(
           "Product not found",
@@ -448,7 +582,8 @@ export class ShopeePlatform implements ECommercePlatform {
         "FETCH_ORDERS_ERROR"
       );
 
-      const orderList = responseData?.orderList || responseData?.order_list || [];
+      const orderList =
+        responseData?.orderList || responseData?.order_list || [];
       const orderSns = orderList.map((o: any) => o.orderSn || o.order_sn);
 
       const ordersList = await this.fetchOrderDetails(orderSns);
@@ -464,11 +599,127 @@ export class ShopeePlatform implements ECommercePlatform {
     }
   }
 
+  /**
+   * Get orders with pagination info
+   * @param options - Query options
+   * @returns Orders with pagination metadata
+   */
+  async getOrdersWithPagination(options?: OrderQueryOptions): Promise<{
+    orders: Order[];
+    more: boolean;
+    nextCursor?: string;
+  }> {
+    try {
+      const params: any = {
+        pageSize: options?.limit || 100,
+        timeRangeField: "create_time",
+        timeFrom: options?.startDate
+          ? Math.floor(options.startDate.getTime() / 1000)
+          : Math.floor(Date.now() / 1000) - 86400 * 30,
+        timeTo: options?.endDate
+          ? Math.floor(options.endDate.getTime() / 1000)
+          : Math.floor(Date.now() / 1000),
+      };
+
+      if (options?.status) {
+        params.orderStatus = options.status;
+      }
+
+      // Add cursor for pagination if provided
+      if ((options as any)?.cursor) {
+        params.cursor = (options as any).cursor;
+      }
+
+      const response = await this.client.get(ShopeeApiPath.ORDER_LIST, {
+        params: params,
+      });
+
+      const responseData: any = this.handleApiResponse(
+        response,
+        "Failed to fetch orders",
+        "FETCH_ORDERS_ERROR"
+      );
+
+      const orderList =
+        responseData?.orderList || responseData?.order_list || [];
+      const orderSns = orderList.map((o: any) => o.orderSn || o.order_sn);
+
+      const ordersList = await this.fetchOrderDetails(orderSns);
+      const orders = ordersList.map((o: any) => this.mapShopeeOrderToOrder(o));
+
+      return {
+        orders,
+        more: responseData.more || false,
+        nextCursor: responseData.nextCursor,
+      };
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to fetch orders from Shopee",
+        "FETCH_ORDERS_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
+  /**
+   * Get all orders with automatic pagination
+   * @param options - Query options (date range, status)
+   * @param maxItems - Maximum items to fetch (default: no limit)
+   * @returns All orders
+   */
+  async getAllOrders(
+    options?: OrderQueryOptions,
+    maxItems?: number
+  ): Promise<Order[]> {
+    try {
+      const allOrders: Order[] = [];
+      let cursor: string | undefined = undefined;
+      let hasMore = true;
+      const pageSize = 100; // Shopee max page size
+
+      while (hasMore) {
+        const result = await this.getOrdersWithPagination({
+          ...options,
+          limit: pageSize,
+          cursor,
+        } as any);
+
+        allOrders.push(...result.orders);
+
+        hasMore = result.more;
+        cursor = result.nextCursor;
+
+        // Check if we've reached the max items limit
+        if (maxItems && allOrders.length >= maxItems) {
+          return allOrders.slice(0, maxItems);
+        }
+
+        // Safety check to prevent infinite loops
+        if (allOrders.length >= 50000) {
+          console.warn("Reached safety limit of 50,000 orders");
+          break;
+        }
+      }
+
+      return allOrders;
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        "Failed to fetch all orders from Shopee",
+        "FETCH_ALL_ORDERS_ERROR",
+        500,
+        error
+      );
+    }
+  }
+
   async getOrderById(id: string): Promise<Order> {
     try {
       const ordersList = await this.fetchOrderDetails([id]);
       const order = ordersList[0];
-      
+
       if (!order) {
         throw new EcomConnectorError("Order not found", "ORDER_NOT_FOUND", 404);
       }

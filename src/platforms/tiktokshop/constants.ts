@@ -152,6 +152,7 @@ export enum TikTokApiPathV2 {
   ORDER_DETAIL = '/order/202309/orders/{order_id}',
 
   // Products
+  PRODUCT_LIST = '/product/202309/products/search',
   PRODUCT_DETAIL = '/product/202309/products/{product_id}',
   CATEGORIES = '/product/202309/categories',
   CATEGORY_RULE = '/product/202309/categories/{category_id}/rules',
@@ -159,6 +160,7 @@ export enum TikTokApiPathV2 {
   ATTRIBUTES = '/product/202309/categories/{category_id}/attributes',
   PRODUCT_IMAGE = '/product/202309/images/upload',
   CREATE_PRODUCT = '/product/202309/products',
+  UPDATE_PRODUCT = '/product/202309/products/{product_id}',
   ACTIVE_PRODUCT = '/product/202309/products/activate',
   DEACTIVE_PRODUCT = '/product/202309/products/deactivate',
 

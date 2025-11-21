@@ -136,7 +136,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
 
   async getProducts(options?: ProductQueryOptions): Promise<Product[]> {
     try {
-      const response = await this.client.get(TikTokApiPath.PRODUCT_LIST, {
+      const response = await this.client.get(TikTokApiPathV2.PRODUCT_LIST, {
         params: {
           page_number: options?.page || 1,
           page_size: options?.limit || 20,
@@ -168,9 +168,11 @@ export class TikTokShopPlatform implements ECommercePlatform {
 
   async getProductById(id: string): Promise<Product> {
     try {
-      const response = await this.client.get(TikTokApiPath.PRODUCT_DETAIL, {
-        params: { product_id: id },
-      });
+      const path = TikTokApiPathV2.PRODUCT_DETAIL.replace(
+        TikTokPathPlaceholder.PRODUCT,
+        id
+      );
+      const response = await this.client.get(path);
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -246,7 +248,12 @@ export class TikTokShopPlatform implements ECommercePlatform {
         updateData.description = productData.description;
       if (productData.price) updateData.price = productData.price.toString();
 
-      const response = await this.client.put(TikTokApiPath.UPDATE_STOCK, updateData);
+      // TikTok Shop v2 uses UPDATE_PRODUCT endpoint
+      const path = TikTokApiPathV2.UPDATE_PRODUCT.replace(
+        TikTokPathPlaceholder.PRODUCT,
+        id
+      );
+      const response = await this.client.put(path, updateData);
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -271,7 +278,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
 
   async getOrders(options?: OrderQueryOptions): Promise<Order[]> {
     try {
-      const response = await this.client.get(TikTokApiPath.ORDER_LIST, {
+      const response = await this.client.get(TikTokApiPathV2.ORDER_LIST, {
         params: {
           page_number: options?.page || 1,
           page_size: options?.limit || 20,
@@ -304,9 +311,11 @@ export class TikTokShopPlatform implements ECommercePlatform {
 
   async getOrderById(id: string): Promise<Order> {
     try {
-      const response = await this.client.get(TikTokApiPath.ORDER_DETAIL, {
-        params: { order_id: id },
-      });
+      const path = TikTokApiPathV2.ORDER_DETAIL.replace(
+        TikTokPathPlaceholder.ORDER,
+        id
+      );
+      const response = await this.client.get(path);
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -404,7 +413,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
   async refreshAccessToken(refreshToken: string): Promise<any> {
     try {
       const timestamp = Math.floor(Date.now() / 1000);
-      const path = TikTokApiPath.REFRESH_TOKEN;
+      const path = TikTokApiPathV2.REFRESH_TOKEN;
       const commonParam = `app_key=${this.credentials.appKey}&timestamp=${timestamp}`;
       const signature = this.generateSignature(path, timestamp);
 
