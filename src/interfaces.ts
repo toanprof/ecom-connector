@@ -137,10 +137,11 @@ export interface ECommercePlatform {
   getProducts(options?: ProductQueryOptions): Promise<Product[]>;
 
   /**
-   * Get products with pagination info (Shopee only)
+   * Get products with pagination info
    * @returns Products with pagination metadata
+   * Note: Full auto-pagination only supported on Shopee. Other platforms return single page results.
    */
-  getProductsWithPagination?(options?: ProductQueryOptions): Promise<{
+  getProductsWithPagination(options?: ProductQueryOptions): Promise<{
     products: Product[];
     totalCount: number;
     hasNextPage: boolean;
@@ -148,13 +149,14 @@ export interface ECommercePlatform {
   }>;
 
   /**
-   * Get all products with automatic pagination (Shopee only)
+   * Get all products with automatic pagination
    * @param options - Query options
    * @param maxItems - Maximum items to fetch (default: no limit)
    * @returns All products
+   * Note: Full auto-pagination only supported on Shopee. Other platforms return filtered results.
    */
-  getAllProducts?(
-    options?: { status?: string },
+  getAllProducts(
+    options?: { status?: string | string[] },
     maxItems?: number
   ): Promise<Product[]>;
 
@@ -182,22 +184,24 @@ export interface ECommercePlatform {
   getOrders(options?: OrderQueryOptions): Promise<Order[]>;
 
   /**
-   * Get orders with pagination info (Shopee only)
+   * Get orders with pagination info
    * @returns Orders with pagination metadata
+   * Note: Full auto-pagination only supported on Shopee. Other platforms return single page results.
    */
-  getOrdersWithPagination?(options?: OrderQueryOptions): Promise<{
+  getOrdersWithPagination(options?: OrderQueryOptions): Promise<{
     orders: Order[];
     more: boolean;
     nextCursor?: string;
   }>;
 
   /**
-   * Get all orders with automatic pagination (Shopee only)
+   * Get all orders with automatic pagination
    * @param options - Query options
    * @param maxItems - Maximum items to fetch (default: no limit)
    * @returns All orders
+   * Note: Full auto-pagination only supported on Shopee. Other platforms return filtered results.
    */
-  getAllOrders?(
+  getAllOrders(
     options?: OrderQueryOptions,
     maxItems?: number
   ): Promise<Order[]>;

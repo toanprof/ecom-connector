@@ -338,6 +338,72 @@ export class TikTokShopPlatform implements ECommercePlatform {
     }
   }
 
+  /**
+   * Get products with pagination (TikTok Shop uses page-based pagination)
+   */
+  async getProductsWithPagination(options?: ProductQueryOptions): Promise<{
+    products: Product[];
+    totalCount: number;
+    hasNextPage: boolean;
+    nextOffset: number;
+  }> {
+    const products = await this.getProducts(options);
+    const currentPage = options?.page || 1;
+    const pageSize = options?.limit || 20;
+    
+    return {
+      products,
+      totalCount: products.length,
+      hasNextPage: products.length === pageSize,
+      nextOffset: currentPage + 1,
+    };
+  }
+
+  /**
+   * Get all products (TikTok Shop - fetches with current filters)
+   */
+  async getAllProducts(
+    options?: { status?: string | string[] },
+    maxItems?: number
+  ): Promise<Product[]> {
+    return this.getProducts({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
+  /**
+   * Get orders with pagination (TikTok Shop uses page-based pagination)
+   */
+  async getOrdersWithPagination(options?: OrderQueryOptions): Promise<{
+    orders: Order[];
+    more: boolean;
+    nextCursor?: string;
+  }> {
+    const orders = await this.getOrders(options);
+    const currentPage = options?.page || 1;
+    const pageSize = options?.limit || 100;
+    
+    return {
+      orders,
+      more: orders.length === pageSize,
+      nextCursor: (currentPage + 1).toString(),
+    };
+  }
+
+  /**
+   * Get all orders (TikTok Shop - fetches with current filters)
+   */
+  async getAllOrders(
+    options?: OrderQueryOptions,
+    maxItems?: number
+  ): Promise<Order[]> {
+    return this.getOrders({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
   async updateOrderStatus(id: string, status: string): Promise<Order> {
     try {
       const response = await this.client.post("/api/orders/status", {

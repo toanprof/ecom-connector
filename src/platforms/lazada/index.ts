@@ -387,6 +387,72 @@ export class LazadaPlatform implements ECommercePlatform {
     }
   }
 
+  /**
+   * Get products with pagination (Lazada uses offset-based pagination)
+   */
+  async getProductsWithPagination(options?: ProductQueryOptions): Promise<{
+    products: Product[];
+    totalCount: number;
+    hasNextPage: boolean;
+    nextOffset: number;
+  }> {
+    const products = await this.getProducts(options);
+    const offset = options?.offset || 0;
+    const limit = options?.limit || 20;
+    
+    return {
+      products,
+      totalCount: products.length,
+      hasNextPage: products.length === limit,
+      nextOffset: offset + limit,
+    };
+  }
+
+  /**
+   * Get all products (Lazada - fetches with current filters)
+   */
+  async getAllProducts(
+    options?: { status?: string | string[] },
+    maxItems?: number
+  ): Promise<Product[]> {
+    return this.getProducts({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
+  /**
+   * Get orders with pagination (Lazada uses offset-based pagination)
+   */
+  async getOrdersWithPagination(options?: OrderQueryOptions): Promise<{
+    orders: Order[];
+    more: boolean;
+    nextCursor?: string;
+  }> {
+    const orders = await this.getOrders(options);
+    const offset = options?.offset || 0;
+    const limit = options?.limit || 100;
+    
+    return {
+      orders,
+      more: orders.length === limit,
+      nextCursor: (offset + limit).toString(),
+    };
+  }
+
+  /**
+   * Get all orders (Lazada - fetches with current filters)
+   */
+  async getAllOrders(
+    options?: OrderQueryOptions,
+    maxItems?: number
+  ): Promise<Order[]> {
+    return this.getOrders({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
   async updateOrderStatus(id: string, status: string): Promise<Order> {
     try {
       const response = await this.client.post(LazadaApiPath.SET_STATUS_TO_PACKED, {

@@ -295,6 +295,72 @@ export class ZaloOAPlatform implements ECommercePlatform {
     }
   }
 
+  /**
+   * Get products with pagination (Zalo OA - basic implementation)
+   */
+  async getProductsWithPagination(options?: ProductQueryOptions): Promise<{
+    products: Product[];
+    totalCount: number;
+    hasNextPage: boolean;
+    nextOffset: number;
+  }> {
+    const products = await this.getProducts(options);
+    const offset = options?.offset || 0;
+    const limit = options?.limit || 20;
+    
+    return {
+      products,
+      totalCount: products.length,
+      hasNextPage: products.length === limit,
+      nextOffset: offset + limit,
+    };
+  }
+
+  /**
+   * Get all products (Zalo OA - fetches with current filters)
+   */
+  async getAllProducts(
+    options?: { status?: string | string[] },
+    maxItems?: number
+  ): Promise<Product[]> {
+    return this.getProducts({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
+  /**
+   * Get orders with pagination (Zalo OA - basic implementation)
+   */
+  async getOrdersWithPagination(options?: OrderQueryOptions): Promise<{
+    orders: Order[];
+    more: boolean;
+    nextCursor?: string;
+  }> {
+    const orders = await this.getOrders(options);
+    const offset = options?.offset || 0;
+    const limit = options?.limit || 100;
+    
+    return {
+      orders,
+      more: orders.length === limit,
+      nextCursor: (offset + limit).toString(),
+    };
+  }
+
+  /**
+   * Get all orders (Zalo OA - fetches with current filters)
+   */
+  async getAllOrders(
+    options?: OrderQueryOptions,
+    maxItems?: number
+  ): Promise<Order[]> {
+    return this.getOrders({
+      ...options,
+      limit: maxItems || 100,
+    });
+  }
+
   async updateOrderStatus(id: string, status: string): Promise<Order> {
     try {
       const statusCode = this.reverseMapOrderStatus(status);
