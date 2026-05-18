@@ -82,7 +82,7 @@ export class ShopeePlatform implements ECommercePlatform {
 
         return config;
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     );
 
     this.client.interceptors.response.use(
@@ -98,9 +98,9 @@ export class ShopeePlatform implements ECommercePlatform {
           error.response?.data?.message || error.message,
           error.response?.data?.error || "SHOPEE_ERROR",
           error.response?.status,
-          error.response?.data
+          error.response?.data,
         );
-      }
+      },
     );
   }
 
@@ -125,14 +125,14 @@ export class ShopeePlatform implements ECommercePlatform {
   private handleApiResponse<T = any>(
     response: any,
     errorMessage: string,
-    errorCode: string
+    errorCode: string,
   ): T {
     if (response.data.error) {
       throw new EcomConnectorError(
         response.data.message,
         response.data.error,
         400,
-        response.data
+        response.data,
       );
     }
     return response.data.response as T;
@@ -156,7 +156,7 @@ export class ShopeePlatform implements ECommercePlatform {
     const responseData: any = this.handleApiResponse(
       response,
       "Failed to fetch order details",
-      "FETCH_ORDER_DETAILS_ERROR"
+      "FETCH_ORDER_DETAILS_ERROR",
     );
 
     return responseData?.orderList || responseData?.order_list || [];
@@ -181,10 +181,56 @@ export class ShopeePlatform implements ECommercePlatform {
     const responseData: any = this.handleApiResponse(
       response,
       "Failed to fetch product details",
-      "FETCH_PRODUCT_DETAILS_ERROR"
+      "FETCH_PRODUCT_DETAILS_ERROR",
     );
 
-    return responseData?.itemList || responseData?.item_list || [];
+    const itemList = responseData?.itemList || responseData?.item_list || [];
+
+    const enrichedItemList = await Promise.all(
+      itemList.map(async (item: any) => {
+        if (!item?.hasModel || !item?.itemId) {
+          return item;
+        }
+
+        try {
+          const modelData = await this.fetchModelList(item.itemId);
+          if (!modelData) {
+            return item;
+          }
+
+          return {
+            ...item,
+            modelList: modelData.model || modelData.modelList || [],
+            tierVariation:
+              modelData.tierVariation || modelData.tier_variation || [],
+            standardiseTierVariation:
+              modelData.standardiseTierVariation ||
+              modelData.standardise_tier_variation ||
+              [],
+          };
+        } catch (error) {
+          return item;
+        }
+      }),
+    );
+
+    return enrichedItemList;
+  }
+
+  private async fetchModelList(itemId: number): Promise<any | null> {
+    const response = await this.client.get(ShopeeApiPath.GET_MODEL_LIST, {
+      params: {
+        itemId,
+      },
+    });
+
+    const responseData: any = this.handleApiResponse(
+      response,
+      "Failed to fetch model list",
+      "FETCH_MODEL_LIST_ERROR",
+    );
+
+    return responseData || null;
   }
 
   /**
@@ -199,26 +245,50 @@ export class ShopeePlatform implements ECommercePlatform {
 
     return Array.isArray(itemList)
       ? itemList.map((item: any) =>
-          typeof item === "number" ? item : item.itemId || item.item_id
+          typeof item === "number" ? item : item.itemId || item.item_id,
         )
       : [];
   }
 
   private mapShopeeProductToProduct(shopeeProduct: any): Product {
+    const modelList = shopeeProduct.modelList || shopeeProduct.model || [];
+    const modelPriceInfo = Array.isArray(modelList)
+      ? modelList.map((model: any) => model.priceInfo?.[0]).filter(Boolean)
+      : [];
+    const modelPrices = modelPriceInfo
+      .map((info: any) => info.currentPrice ?? info.originalPrice)
+      .filter((price: any) => typeof price === "number");
+    const modelCurrency = modelPriceInfo.find(
+      (info: any) => info?.currency,
+    )?.currency;
+
+    const modelStockValues = Array.isArray(modelList)
+      ? modelList
+          .map(
+            (model: any) => model.stockInfoV2?.summaryInfo?.totalAvailableStock,
+          )
+          .filter((value: any) => typeof value === "number")
+      : [];
+    const modelStock = modelStockValues.length
+      ? modelStockValues.reduce((sum: number, value: number) => sum + value, 0)
+      : undefined;
+
     const priceInfo = shopeeProduct.priceInfo?.[0];
-    const price =
-      priceInfo?.currentPrice ||
-      priceInfo?.originalPrice ||
-      shopeeProduct.price ||
-      0;
-    const currency = priceInfo?.currency || "VND";
+    const price = modelPrices.length
+      ? Math.min(...modelPrices)
+      : priceInfo?.currentPrice ||
+        priceInfo?.originalPrice ||
+        shopeeProduct.price ||
+        0;
+    const currency = modelCurrency || priceInfo?.currency || "VND";
 
     const images =
       shopeeProduct.image?.imageUrlList || shopeeProduct.images || [];
 
     const stock =
-      shopeeProduct.stockInfoV2?.summaryInfo?.totalAvailableStock ||
-      shopeeProduct.stock ||
+      modelStock ??
+      shopeeProduct.stockInfoV2?.summaryInfo?.totalAvailableStock ??
+      shopeeProduct.stock ??
       0;
 
     const description =
@@ -318,7 +388,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch products from Shopee",
         "FETCH_PRODUCTS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -354,13 +424,13 @@ export class ShopeePlatform implements ECommercePlatform {
       const responseData: any = this.handleApiResponse(
         response,
         "Failed to fetch products",
-        "FETCH_PRODUCTS_ERROR"
+        "FETCH_PRODUCTS_ERROR",
       );
 
       const itemIds = this.extractItemIds(response);
       const detailsList = await this.fetchProductDetails(itemIds);
       const products = detailsList.map((p: any) =>
-        this.mapShopeeProductToProduct(p)
+        this.mapShopeeProductToProduct(p),
       );
 
       return {
@@ -375,7 +445,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch products from Shopee",
         "FETCH_PRODUCTS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -388,13 +458,13 @@ export class ShopeePlatform implements ECommercePlatform {
    * @example
    * // Single status
    * getAllProducts({ status: 'NORMAL' })
-   * 
+   *
    * // Multiple statuses
    * getAllProducts({ status: ['NORMAL', 'BANNED'] })
    */
   async getAllProducts(
     options?: { status?: string | string[] },
-    maxItems?: number
+    maxItems?: number,
   ): Promise<Product[]> {
     try {
       const allProducts: Product[] = [];
@@ -433,7 +503,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch all products from Shopee",
         "FETCH_ALL_PRODUCTS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -447,7 +517,7 @@ export class ShopeePlatform implements ECommercePlatform {
         throw new EcomConnectorError(
           "Product not found",
           "PRODUCT_NOT_FOUND",
-          404
+          404,
         );
       }
 
@@ -458,7 +528,7 @@ export class ShopeePlatform implements ECommercePlatform {
         `Failed to fetch product ${id} from Shopee`,
         "FETCH_PRODUCT_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -485,7 +555,7 @@ export class ShopeePlatform implements ECommercePlatform {
         undefined,
         {
           params,
-        }
+        },
       );
 
       if (response.data.error) {
@@ -493,7 +563,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -505,14 +575,14 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to create product on Shopee",
         "CREATE_PRODUCT_ERROR",
         500,
-        error
+        error,
       );
     }
   }
 
   async updateProduct(
     id: string,
-    productData: Partial<ProductInput>
+    productData: Partial<ProductInput>,
   ): Promise<Product> {
     try {
       const updateData: any = {
@@ -531,7 +601,7 @@ export class ShopeePlatform implements ECommercePlatform {
         undefined,
         {
           params: updateData,
-        }
+        },
       );
 
       if (response.data.error) {
@@ -539,7 +609,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -550,7 +620,7 @@ export class ShopeePlatform implements ECommercePlatform {
         `Failed to update product ${id} on Shopee`,
         "UPDATE_PRODUCT_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -562,7 +632,7 @@ export class ShopeePlatform implements ECommercePlatform {
         timeRangeField: "create_time",
         timeFrom: options?.startDate
           ? Math.floor(options.startDate.getTime() / 1000)
-          : Math.floor(Date.now() / 1000) - 86400 * 30,
+          : Math.floor(Date.now() / 1000) - 86400 * 15,
         timeTo: options?.endDate
           ? Math.floor(options.endDate.getTime() / 1000)
           : Math.floor(Date.now() / 1000),
@@ -579,7 +649,7 @@ export class ShopeePlatform implements ECommercePlatform {
       const responseData: any = this.handleApiResponse(
         response,
         "Failed to fetch orders",
-        "FETCH_ORDERS_ERROR"
+        "FETCH_ORDERS_ERROR",
       );
 
       const orderList =
@@ -594,7 +664,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch orders from Shopee",
         "FETCH_ORDERS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -615,7 +685,7 @@ export class ShopeePlatform implements ECommercePlatform {
         timeRangeField: "create_time",
         timeFrom: options?.startDate
           ? Math.floor(options.startDate.getTime() / 1000)
-          : Math.floor(Date.now() / 1000) - 86400 * 30,
+          : Math.floor(Date.now() / 1000) - 86400 * 15,
         timeTo: options?.endDate
           ? Math.floor(options.endDate.getTime() / 1000)
           : Math.floor(Date.now() / 1000),
@@ -637,7 +707,7 @@ export class ShopeePlatform implements ECommercePlatform {
       const responseData: any = this.handleApiResponse(
         response,
         "Failed to fetch orders",
-        "FETCH_ORDERS_ERROR"
+        "FETCH_ORDERS_ERROR",
       );
 
       const orderList =
@@ -658,7 +728,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch orders from Shopee",
         "FETCH_ORDERS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -671,7 +741,7 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   async getAllOrders(
     options?: OrderQueryOptions,
-    maxItems?: number
+    maxItems?: number,
   ): Promise<Order[]> {
     try {
       const allOrders: Order[] = [];
@@ -710,7 +780,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to fetch all orders from Shopee",
         "FETCH_ALL_ORDERS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -731,7 +801,7 @@ export class ShopeePlatform implements ECommercePlatform {
         `Failed to fetch order ${id} from Shopee`,
         "FETCH_ORDER_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -740,7 +810,7 @@ export class ShopeePlatform implements ECommercePlatform {
     throw new EcomConnectorError(
       "Shopee does not support direct order status updates via API",
       "NOT_SUPPORTED",
-      501
+      501,
     );
   }
 
@@ -779,7 +849,7 @@ export class ShopeePlatform implements ECommercePlatform {
   async getAccessToken(
     code: string,
     shopId?: string,
-    mainAccountId?: string
+    mainAccountId?: string,
   ): Promise<{
     accessToken: string;
     refreshToken: string;
@@ -793,7 +863,7 @@ export class ShopeePlatform implements ECommercePlatform {
         throw new EcomConnectorError(
           "Either shopId or mainAccountId must be provided",
           "INVALID_PARAMS",
-          400
+          400,
         );
       }
 
@@ -801,7 +871,7 @@ export class ShopeePlatform implements ECommercePlatform {
         throw new EcomConnectorError(
           "Cannot provide both shopId and mainAccountId, use only one",
           "INVALID_PARAMS",
-          400
+          400,
         );
       }
 
@@ -841,7 +911,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message || "Failed to get access token",
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -852,7 +922,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get access token",
         "AUTH_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -867,7 +937,7 @@ export class ShopeePlatform implements ECommercePlatform {
   async refreshAccessToken(
     refreshToken: string,
     shopId?: string,
-    mainAccountId?: string
+    mainAccountId?: string,
   ): Promise<{
     accessToken: string;
     refreshToken: string;
@@ -881,7 +951,7 @@ export class ShopeePlatform implements ECommercePlatform {
         throw new EcomConnectorError(
           "Either shopId or mainAccountId must be provided",
           "INVALID_PARAMS",
-          400
+          400,
         );
       }
 
@@ -889,7 +959,7 @@ export class ShopeePlatform implements ECommercePlatform {
         throw new EcomConnectorError(
           "Cannot provide both shopId and mainAccountId, use only one",
           "INVALID_PARAMS",
-          400
+          400,
         );
       }
 
@@ -929,7 +999,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message || "Failed to refresh access token",
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -940,7 +1010,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to refresh access token",
         "AUTH_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -963,7 +1033,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -974,7 +1044,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get categories",
         "GET_CATEGORIES_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -987,7 +1057,7 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   async getCategoryAttributes(
     categoryId: number,
-    language: string = "en"
+    language: string = "en",
   ): Promise<any> {
     try {
       const response = await this.client.get(ShopeeApiPath.GET_ATTRIBUTES, {
@@ -1002,7 +1072,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1013,7 +1083,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get category attributes",
         "GET_ATTRIBUTES_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1030,7 +1100,7 @@ export class ShopeePlatform implements ECommercePlatform {
     categoryId: number,
     status: number = 1,
     pageSize: number = 100,
-    offset: number = 0
+    offset: number = 0,
   ): Promise<any> {
     try {
       const response = await this.client.get(ShopeeApiPath.GET_BRAND_LIST, {
@@ -1047,7 +1117,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1058,7 +1128,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get brand list",
         "GET_BRAND_LIST_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1071,7 +1141,10 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   async updateStock(
     itemId: number,
-    stockList: Array<{ modelId: number; sellerStock: Array<{ stock: number }> }>
+    stockList: Array<{
+      modelId: number;
+      sellerStock: Array<{ stock: number }>;
+    }>,
   ): Promise<any> {
     try {
       const body = keysToSnake({
@@ -1086,7 +1159,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1097,7 +1170,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to update stock",
         "UPDATE_STOCK_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1110,7 +1183,7 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   async updatePrice(
     itemId: number,
-    priceList: Array<{ modelId: number; originalPrice: number }>
+    priceList: Array<{ modelId: number; originalPrice: number }>,
   ): Promise<any> {
     try {
       const body = keysToSnake({
@@ -1125,7 +1198,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1136,7 +1209,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to update price",
         "UPDATE_PRICE_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1147,7 +1220,7 @@ export class ShopeePlatform implements ECommercePlatform {
    * @returns Update result
    */
   async unlistItem(
-    itemList: Array<{ itemId: number; unlist: boolean }>
+    itemList: Array<{ itemId: number; unlist: boolean }>,
   ): Promise<any> {
     try {
       const body = keysToSnake({
@@ -1161,7 +1234,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1172,7 +1245,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to unlist item",
         "UNLIST_ITEM_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1195,7 +1268,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1206,7 +1279,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to delete product",
         "DELETE_PRODUCT_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1224,7 +1297,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1235,7 +1308,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get logistics channel list",
         "GET_LOGISTICS_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1258,7 +1331,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1269,7 +1342,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to get shipping parameter",
         "GET_SHIPPING_PARAMETER_ERROR",
         500,
-        error
+        error,
       );
     }
   }
@@ -1282,7 +1355,7 @@ export class ShopeePlatform implements ECommercePlatform {
    */
   async shipOrder(
     orderSn: string,
-    pickup: { addressId: number; pickupTimeId: string }
+    pickup: { addressId: number; pickupTimeId: string },
   ): Promise<any> {
     try {
       const body = keysToSnake({
@@ -1297,7 +1370,7 @@ export class ShopeePlatform implements ECommercePlatform {
           response.data.message,
           response.data.error,
           400,
-          response.data
+          response.data,
         );
       }
 
@@ -1308,7 +1381,7 @@ export class ShopeePlatform implements ECommercePlatform {
         "Failed to ship order",
         "SHIP_ORDER_ERROR",
         500,
-        error
+        error,
       );
     }
   }

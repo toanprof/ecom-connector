@@ -11,14 +11,14 @@ export interface TikTokShopProduct {
   id: string;
   title: string;
   description: string;
-  price: {
-    amount: string;
-    currency: string;
-  };
   skus: Array<{
     id: string;
     seller_sku: string;
     quantity: number;
+    price: {
+      tax_exclusive_price: string;
+      currency: string;
+    };
   }>;
   images: Array<{
     url: string;

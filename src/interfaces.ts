@@ -100,6 +100,7 @@ export interface TikTokShopCredentials {
   appKey: string;
   appSecret: string;
   shopId: string;
+  shopCipher?: string;
   accessToken?: string;
 }
 

@@ -1,27 +1,34 @@
 import axios, { AxiosInstance } from "axios";
 import crypto from "crypto";
 import {
+  EcomConnectorConfig,
+  EcomConnectorError,
   ECommercePlatform,
+  Order,
+  OrderQueryOptions,
   Product,
   ProductInput,
   ProductQueryOptions,
-  Order,
-  OrderQueryOptions,
-  EcomConnectorConfig,
-  EcomConnectorError,
   TikTokShopCredentials,
 } from "../../interfaces";
-import { TikTokShopProduct, TikTokShopOrder } from "./types";
-import { keysToCamel, keysToSnake } from "../../utils/transform";
-import { TikTokApiPath, TikTokApiPathV2, TIKTOK_CONSTANTS, TikTokPathPlaceholder } from "./constants";
+import { keysToSnake } from "../../utils/transform";
+import {
+  TIKTOK_CONSTANTS,
+  TikTokApiPathV2,
+  TikTokPathPlaceholder,
+} from "./constants";
 
 export class TikTokShopPlatform implements ECommercePlatform {
   private client: AxiosInstance;
   private credentials: TikTokShopCredentials;
-  private baseURL: string = TIKTOK_CONSTANTS.ENDPOINT;
+  private readonly baseURL: string = TIKTOK_CONSTANTS.ENDPOINT;
 
   constructor(config: EcomConnectorConfig) {
     this.credentials = config.credentials as TikTokShopCredentials;
+
+    if (config.sandbox) {
+      this.baseURL = TIKTOK_CONSTANTS.ENDPOINT_SANDBOX;
+    }
 
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -38,14 +45,41 @@ export class TikTokShopPlatform implements ECommercePlatform {
     this.client.interceptors.request.use(
       (config) => {
         const timestamp = Math.floor(Date.now() / 1000);
-        const signature = this.generateSignature(config.url || "", timestamp);
+        const path = config.url || "";
+
+        // Merge existing params with our standard params
+        const allParams: Record<string, any> = {
+          ...config.params, // IMPORTANT: Include query params from the request
+          access_token: this.credentials.accessToken || "", // TikTok requires access_token in params
+          app_key: this.credentials.appKey,
+          timestamp: timestamp.toString(),
+        };
+
+        // Some endpoints don't need shop_id and shop_cipher
+        const isAuthEndpoint =
+          path.includes("/authorization/") ||
+          path.includes("/token/") ||
+          path === TikTokApiPathV2.AUTHORIZED_SHOP;
+
+        if (!isAuthEndpoint) {
+          if (this.credentials.shopId) {
+            allParams.shop_id = this.credentials.shopId;
+          }
+          if (this.credentials.shopCipher) {
+            allParams.shop_cipher = this.credentials.shopCipher;
+          }
+          // Add version for v2 endpoints
+          if (path.includes("/202309/")) {
+            allParams.version = "202309";
+          }
+        }
+        // Generate signature (with body if present)
+        const signature = this.generateSignature(path, allParams, config.data);
 
         config.headers["x-tts-access-token"] =
           this.credentials.accessToken || "";
         config.params = {
-          ...config.params,
-          app_key: this.credentials.appKey,
-          timestamp,
+          ...allParams,
           sign: signature,
         };
 
@@ -55,13 +89,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
     );
 
     this.client.interceptors.response.use(
-      (response) => {
-        // Transform response data to camelCase
-        if (response.data) {
-          response.data = keysToCamel(response.data);
-        }
-        return response;
-      },
+      (response) => response,
       (error) => {
         throw new EcomConnectorError(
           error.response?.data?.message || error.message,
@@ -73,75 +101,111 @@ export class TikTokShopPlatform implements ECommercePlatform {
     );
   }
 
-  private generateSignature(path: string, timestamp: number): string {
-    const sign = crypto
+  private generateSignature(
+    path: string,
+    params: Record<string, any>,
+    body?: any
+  ): string {
+    // TikTok Shop signature algorithm (from official reference):
+    // signString = appSecret + path + key1value1key2value2... + (body || appSecret)
+    // signature = HmacSHA256(signString, appSecret)
+
+    const signParams = { ...params };
+    delete signParams.sign;
+    delete signParams.access_token; // access_token excluded from signature but present in URL
+
+    // Step 1: Sort params alphabetically
+    const sortedKeys = Object.keys(signParams).sort();
+
+    // Step 2: Build signString starting with appSecret + path
+    let signString = this.credentials.appSecret + path;
+
+    // Step 3: Append sorted params: key1value1key2value2...
+    for (const key of sortedKeys) {
+      signString += key + signParams[key];
+    }
+
+    // Step 4: Append body or appSecret
+    // Reference: signstring + (!body ? appSecret : JSON.stringify(body) + appSecret)
+    if (!body) {
+      signString += this.credentials.appSecret;
+    } else {
+      signString += JSON.stringify(body) + this.credentials.appSecret;
+    }
+
+    // Step 5: HMAC-SHA256
+    return crypto
       .createHmac("sha256", this.credentials.appSecret)
-      .update(`${this.credentials.appKey}${path}${timestamp}`)
+      .update(signString)
       .digest("hex");
-    return sign;
   }
 
-  private mapTikTokProductToProduct(tiktokProduct: TikTokShopProduct): Product {
-    const firstSku = tiktokProduct.skus[0];
-    return {
-      id: tiktokProduct.id,
-      name: tiktokProduct.title,
-      description: tiktokProduct.description,
-      price: parseFloat(tiktokProduct.price.amount),
-      currency: tiktokProduct.price.currency,
-      stock: firstSku?.quantity || 0,
-      sku: firstSku?.seller_sku,
-      images: tiktokProduct.images.map((img) => img.url),
-      status: tiktokProduct.status === "ACTIVE" ? "active" : "inactive",
-      createdAt: new Date(tiktokProduct.create_time * 1000),
-      updatedAt: new Date(tiktokProduct.update_time * 1000),
-      platformSpecific: tiktokProduct,
-    };
-  }
+  // private mapTikTokProductToProduct(tiktokProduct: TikTokShopProduct): Product {
+  //   console.log("🚀 ~ tiktokProduct:", tiktokProduct)
+  //   const firstSku = tiktokProduct.skus[0];
+  //   return {
+  //     id: tiktokProduct.id,
+  //     name: tiktokProduct.title,
+  //     description: tiktokProduct.description,
+  //     price: parseFloat(firstSku.price.tax_exclusive_price),
+  //     currency: firstSku.price.currency,
+  //     stock: firstSku?.quantity || 0,
+  //     sku: firstSku?.seller_sku,
+  //     images: tiktokProduct.images.map((img) => img.url),
+  //     status: tiktokProduct.status === "ACTIVE" ? "active" : "inactive",
+  //     createdAt: new Date(tiktokProduct.create_time * 1000),
+  //     updatedAt: new Date(tiktokProduct.update_time * 1000),
+  //     platformSpecific: tiktokProduct,
+  //   };
+  // }
 
-  private mapTikTokOrderToOrder(tiktokOrder: TikTokShopOrder): Order {
-    return {
-      id: tiktokOrder.id,
-      orderNumber: tiktokOrder.id,
-      status: tiktokOrder.order_status,
-      totalAmount: parseFloat(tiktokOrder.payment_info.total_amount),
-      currency: tiktokOrder.payment_info.currency,
-      items: tiktokOrder.line_items.map((item) => ({
-        productId: item.product_id,
-        productName: item.product_name,
-        quantity: item.quantity,
-        price: parseFloat(item.sale_price),
-        sku: item.sku_id,
-      })),
-      customer: {
-        id: tiktokOrder.buyer_info.id,
-        name: tiktokOrder.buyer_info.name,
-        email: tiktokOrder.buyer_info.email,
-      },
-      shippingAddress: {
-        fullName: tiktokOrder.recipient_address.name,
-        phone: tiktokOrder.recipient_address.phone,
-        addressLine1: tiktokOrder.recipient_address.address_line1,
-        addressLine2: tiktokOrder.recipient_address.address_line2,
-        city: tiktokOrder.recipient_address.city,
-        state: tiktokOrder.recipient_address.state,
-        country: tiktokOrder.recipient_address.region_code,
-        postalCode: tiktokOrder.recipient_address.postal_code,
-      },
-      createdAt: new Date(tiktokOrder.create_time * 1000),
-      updatedAt: new Date(tiktokOrder.update_time * 1000),
-      platformSpecific: tiktokOrder,
-    };
-  }
+  // private mapTikTokOrderToOrder(tiktokOrder: TikTokShopOrder): Order {
+  //   return {
+  //     id: tiktokOrder.id,
+  //     orderNumber: tiktokOrder.id,
+  //     status: tiktokOrder.order_status,
+  //     totalAmount: parseFloat(tiktokOrder.payment_info.total_amount),
+  //     currency: tiktokOrder.payment_info.currency,
+  //     items: tiktokOrder.line_items.map((item) => ({
+  //       productId: item.product_id,
+  //       productName: item.product_name,
+  //       quantity: item.quantity,
+  //       price: parseFloat(item.sale_price),
+  //       sku: item.sku_id,
+  //     })),
+  //     customer: {
+  //       id: tiktokOrder.buyer_info.id,
+  //       name: tiktokOrder.buyer_info.name,
+  //       email: tiktokOrder.buyer_info.email,
+  //     },
+  //     shippingAddress: {
+  //       fullName: tiktokOrder.recipient_address.name,
+  //       phone: tiktokOrder.recipient_address.phone,
+  //       addressLine1: tiktokOrder.recipient_address.address_line1,
+  //       addressLine2: tiktokOrder.recipient_address.address_line2,
+  //       city: tiktokOrder.recipient_address.city,
+  //       state: tiktokOrder.recipient_address.state,
+  //       country: tiktokOrder.recipient_address.region_code,
+  //       postalCode: tiktokOrder.recipient_address.postal_code,
+  //     },
+  //     createdAt: new Date(tiktokOrder.create_time * 1000),
+  //     updatedAt: new Date(tiktokOrder.update_time * 1000),
+  //     platformSpecific: tiktokOrder,
+  //   };
+  // }
 
   async getProducts(options?: ProductQueryOptions): Promise<Product[]> {
     try {
-      const response = await this.client.get(TikTokApiPathV2.PRODUCT_LIST, {
-        params: {
-          page_number: options?.page || 1,
-          page_size: options?.limit || 20,
-        },
-      });
+      // TikTok Shop: pagination goes in query params, body is empty {}
+      const response = await this.client.post(
+        TikTokApiPathV2.PRODUCT_LIST,
+        {}, // Empty body
+        {
+          params: {
+            page_size: options?.limit || 10,
+          },
+        }
+      );
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -152,9 +216,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return response.data.data.products.map((p: TikTokShopProduct) =>
-        this.mapTikTokProductToProduct(p)
-      );
+      return response.data.data?.products || [];
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -183,7 +245,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return this.mapTikTokProductToProduct(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -278,13 +340,23 @@ export class TikTokShopPlatform implements ECommercePlatform {
 
   async getOrders(options?: OrderQueryOptions): Promise<Order[]> {
     try {
-      const response = await this.client.get(TikTokApiPathV2.ORDER_LIST, {
-        params: {
-          page_number: options?.page || 1,
-          page_size: options?.limit || 20,
-          order_status: options?.status,
-        },
-      });
+      // TikTok Shop: pagination in query params, body is empty {}
+      const queryParams: any = {
+        page_size: options?.limit || 10,
+      };
+
+      // Add order_status to query params if provided
+      if (options?.status) {
+        queryParams.order_status = options.status;
+      }
+
+      const response = await this.client.post(
+        TikTokApiPathV2.ORDER_LIST,
+        {}, // Empty body
+        {
+          params: queryParams,
+        }
+      );
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -294,10 +366,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
           response.data
         );
       }
-
-      return response.data.data.orders.map((o: TikTokShopOrder) =>
-        this.mapTikTokOrderToOrder(o)
-      );
+      return response.data.data?.orders || [];
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -326,7 +395,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return this.mapTikTokOrderToOrder(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -350,7 +419,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
     const products = await this.getProducts(options);
     const currentPage = options?.page || 1;
     const pageSize = options?.limit || 20;
-    
+
     return {
       products,
       totalCount: products.length,
@@ -383,7 +452,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
     const orders = await this.getOrders(options);
     const currentPage = options?.page || 1;
     const pageSize = options?.limit || 100;
-    
+
     return {
       orders,
       more: orders.length === pageSize,
@@ -459,7 +528,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -478,12 +547,18 @@ export class TikTokShopPlatform implements ECommercePlatform {
    */
   async refreshAccessToken(refreshToken: string): Promise<any> {
     try {
-      const timestamp = Math.floor(Date.now() / 1000);
-      const path = TikTokApiPathV2.REFRESH_TOKEN;
-      const commonParam = `app_key=${this.credentials.appKey}&timestamp=${timestamp}`;
-      const signature = this.generateSignature(path, timestamp);
+      // TikTok uses same endpoint for both get and refresh, differentiated by grant_type
+      const grantType = "refresh_token";
+      const params = new URLSearchParams({
+        app_key: this.credentials.appKey,
+        refresh_token: refreshToken,
+        app_secret: this.credentials.appSecret,
+        grant_type: grantType,
+      });
 
-      const url = `${this.baseURL}${path}?${commonParam}&sign=${signature}`;
+      const url = `https://auth.tiktok-shops.com${
+        TikTokApiPathV2.REFRESH_TOKEN
+      }?${params.toString()}`;
       const response = await axios.get(url);
 
       if (response.data.code !== 0) {
@@ -495,7 +570,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -513,9 +588,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
    */
   async getAuthorizedShops(): Promise<any> {
     try {
-      const response = await this.client.get(
-        TikTokApiPathV2.AUTHORIZED_SHOP
-      );
+      const response = await this.client.get(TikTokApiPathV2.AUTHORIZED_SHOP);
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -526,7 +599,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -555,7 +628,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -589,7 +662,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -625,7 +698,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -659,7 +732,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -700,7 +773,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -723,7 +796,10 @@ export class TikTokShopPlatform implements ECommercePlatform {
         productIds,
       });
 
-      const response = await this.client.post(TikTokApiPathV2.ACTIVE_PRODUCT, body);
+      const response = await this.client.post(
+        TikTokApiPathV2.ACTIVE_PRODUCT,
+        body
+      );
 
       if (response.data.code !== 0) {
         throw new EcomConnectorError(
@@ -734,7 +810,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -771,7 +847,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -805,7 +881,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -850,7 +926,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(
@@ -894,7 +970,7 @@ export class TikTokShopPlatform implements ECommercePlatform {
         );
       }
 
-      return keysToCamel(response.data.data);
+      return response.data.data;
     } catch (error) {
       if (error instanceof EcomConnectorError) throw error;
       throw new EcomConnectorError(

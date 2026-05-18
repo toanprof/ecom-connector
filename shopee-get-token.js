@@ -2,6 +2,7 @@ require('dotenv').config();
 const { createEcomConnector } = require('./dist');
 
 const authCode = process.argv[2];
+console.log("🚀 ~ authCode:", authCode)
 const shopId = process.argv[3];
 
 if (!authCode) {
