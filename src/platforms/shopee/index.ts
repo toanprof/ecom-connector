@@ -18,12 +18,49 @@ import {
   SHOPEE_CONSTANTS,
   SHOPEE_ORDER_OPTIONAL_FIELDS,
 } from "./constants";
+import {
+  createShopeeSdkApiGroups,
+  SHOPEE_SDK_API_DEFINITIONS,
+  ShopeeSdkApiDefinition,
+  ShopeeSdkApiGroup,
+  ShopeeSdkApiGroups,
+} from "./sdk-api";
 
 export class ShopeePlatform implements ECommercePlatform {
   private client: AxiosInstance;
   private credentials: ShopeeCredentials;
   private baseURL: string = SHOPEE_CONSTANTS.ENDPOINT;
   private pathPrefix: string = "";
+  public readonly sdkApi: ShopeeSdkApiGroups;
+  public readonly accountHealth: ShopeeSdkApiGroup;
+  public readonly addOnDeal: ShopeeSdkApiGroup;
+  public readonly ads: ShopeeSdkApiGroup;
+  public readonly ams: ShopeeSdkApiGroup;
+  public readonly auth: ShopeeSdkApiGroup;
+  public readonly bundleDeal: ShopeeSdkApiGroup;
+  public readonly discount: ShopeeSdkApiGroup;
+  public readonly fbs: ShopeeSdkApiGroup;
+  public readonly firstMile: ShopeeSdkApiGroup;
+  public readonly followPrize: ShopeeSdkApiGroup;
+  public readonly globalProduct: ShopeeSdkApiGroup;
+  public readonly livestream: ShopeeSdkApiGroup;
+  public readonly logistics: ShopeeSdkApiGroup;
+  public readonly media: ShopeeSdkApiGroup;
+  public readonly mediaSpace: ShopeeSdkApiGroup;
+  public readonly merchant: ShopeeSdkApiGroup;
+  public readonly order: ShopeeSdkApiGroup;
+  public readonly payment: ShopeeSdkApiGroup;
+  public readonly product: ShopeeSdkApiGroup;
+  public readonly public: ShopeeSdkApiGroup;
+  public readonly push: ShopeeSdkApiGroup;
+  public readonly returns: ShopeeSdkApiGroup;
+  public readonly sbs: ShopeeSdkApiGroup;
+  public readonly shop: ShopeeSdkApiGroup;
+  public readonly shopCategory: ShopeeSdkApiGroup;
+  public readonly shopFlashSale: ShopeeSdkApiGroup;
+  public readonly topPicks: ShopeeSdkApiGroup;
+  public readonly video: ShopeeSdkApiGroup;
+  public readonly voucher: ShopeeSdkApiGroup;
 
   constructor(config: EcomConnectorConfig) {
     this.credentials = config.credentials as ShopeeCredentials;
@@ -51,6 +88,39 @@ export class ShopeePlatform implements ECommercePlatform {
     }
 
     this.setupInterceptors();
+
+    this.sdkApi = createShopeeSdkApiGroups(this.requestSdkApi.bind(this));
+    this.accountHealth = this.sdkApi.accountHealth;
+    this.addOnDeal = this.sdkApi.addOnDeal;
+    this.ads = this.sdkApi.ads;
+    this.ams = this.sdkApi.ams;
+    this.auth = this.sdkApi.auth;
+    this.bundleDeal = this.sdkApi.bundleDeal;
+    this.discount = this.sdkApi.discount;
+    this.fbs = this.sdkApi.fbs;
+    this.firstMile = this.sdkApi.firstMile;
+    this.followPrize = this.sdkApi.followPrize;
+    this.globalProduct = this.sdkApi.globalProduct;
+    this.livestream = this.sdkApi.livestream;
+    this.logistics = this.sdkApi.logistics;
+    this.media = this.sdkApi.media;
+    this.mediaSpace = this.sdkApi.mediaSpace;
+    this.merchant = this.sdkApi.merchant;
+    this.order = this.sdkApi.order;
+    this.payment = this.sdkApi.payment;
+    this.product = this.sdkApi.product;
+    this.public = this.sdkApi.public;
+    this.push = this.sdkApi.push;
+    this.returns = this.sdkApi.returns;
+    this.sbs = this.sdkApi.sbs;
+    this.shop = this.sdkApi.shop;
+    this.shopCategory = this.sdkApi.shopCategory;
+    this.shopFlashSale = this.sdkApi.shopFlashSale;
+    this.topPicks = this.sdkApi.topPicks;
+    this.video = this.sdkApi.video;
+    this.voucher = this.sdkApi.voucher;
+
+    this.setupSdkAuthMethodAliases();
   }
 
   private setupInterceptors(): void {
@@ -117,6 +187,219 @@ export class ShopeePlatform implements ECommercePlatform {
       .digest("hex");
 
     return sign;
+  }
+
+  private generateSdkSignature(
+    path: string,
+    timestamp: number,
+    auth: boolean,
+  ): string {
+    let baseString = `${this.credentials.partnerId}${path}${timestamp}`;
+
+    if (auth) {
+      baseString += `${this.credentials.accessToken}${this.credentials.shopId}`;
+    }
+
+    return crypto
+      .createHmac("sha256", this.credentials.partnerKey)
+      .update(baseString)
+      .digest("hex");
+  }
+
+  private buildSdkApiPath(path: string): string {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return normalizedPath.startsWith("/api/v2")
+      ? normalizedPath
+      : `/api/v2${normalizedPath}`;
+  }
+
+  private normalizeSdkParams(
+    params: any,
+    commaParams?: readonly string[],
+  ): any {
+    const normalized = keysToSnake(params || {});
+
+    for (const key of commaParams || []) {
+      if (Array.isArray(normalized[key])) {
+        normalized[key] = normalized[key].join(",");
+      }
+    }
+
+    return normalized;
+  }
+
+  private parseSdkResponsePayload(responseData: any, contentType: string): any {
+    const buffer = Buffer.isBuffer(responseData)
+      ? responseData
+      : responseData instanceof ArrayBuffer
+        ? Buffer.from(responseData)
+        : ArrayBuffer.isView(responseData)
+          ? Buffer.from(
+              responseData.buffer,
+              responseData.byteOffset,
+              responseData.byteLength,
+            )
+          : undefined;
+
+    if (!buffer) {
+      return responseData;
+    }
+
+    if (!contentType.includes("application/json")) {
+      return buffer;
+    }
+
+    const text = buffer.toString("utf8");
+    return text ? JSON.parse(text) : {};
+  }
+
+  private async requestSdkApi(
+    definition: ShopeeSdkApiDefinition,
+    params?: any,
+  ): Promise<any> {
+    try {
+      if (
+        definition.auth &&
+        (!this.credentials.accessToken || !this.credentials.shopId)
+      ) {
+        throw new EcomConnectorError(
+          "Shopee accessToken and shopId are required for authenticated SDK APIs",
+          "SHOPEE_AUTH_REQUIRED",
+          401,
+        );
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const apiPath = this.buildSdkApiPath(definition.path);
+      const url = new URL(`${this.baseURL}${apiPath}`);
+      const normalizedParams = this.normalizeSdkParams(
+        params,
+        definition.commaParams,
+      );
+      const queryParams =
+        definition.httpMethod === "GET" ? normalizedParams : {};
+
+      const sign = this.generateSdkSignature(
+        url.pathname,
+        timestamp,
+        definition.auth,
+      );
+
+      const allQueryParams: Record<string, any> = {
+        partner_id: this.credentials.partnerId,
+        timestamp,
+        ...queryParams,
+        sign,
+      };
+
+      if (definition.auth) {
+        allQueryParams.access_token = this.credentials.accessToken;
+        allQueryParams.shop_id = this.credentials.shopId;
+      }
+
+      Object.entries(allQueryParams).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        if (Array.isArray(value)) {
+          value.forEach((item) => url.searchParams.append(key, String(item)));
+          return;
+        }
+
+        url.searchParams.append(key, String(value));
+      });
+
+      const response = await axios.request({
+        url: url.toString(),
+        method: definition.httpMethod,
+        data: definition.httpMethod === "GET" ? undefined : normalizedParams,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        responseType: "arraybuffer",
+        timeout: this.client.defaults.timeout,
+        validateStatus: () => true,
+      });
+
+      const contentType = String(response.headers["content-type"] || "");
+      const payload = this.parseSdkResponsePayload(response.data, contentType);
+
+      if (response.status >= 400 || payload?.error) {
+        throw new EcomConnectorError(
+          payload?.message ||
+            `Shopee SDK API ${definition.group}.${definition.method} failed`,
+          payload?.error || "SHOPEE_SDK_API_ERROR",
+          response.status,
+          payload,
+        );
+      }
+
+      return Buffer.isBuffer(payload) ? payload : keysToCamel(payload);
+    } catch (error) {
+      if (error instanceof EcomConnectorError) throw error;
+      throw new EcomConnectorError(
+        `Failed to call Shopee SDK API ${definition.group}.${definition.method}`,
+        "SHOPEE_SDK_API_ERROR",
+        500,
+        error,
+      );
+    }
+  }
+
+  private getSdkDefinition(
+    group: string,
+    method: string,
+  ): ShopeeSdkApiDefinition {
+    const definition = SHOPEE_SDK_API_DEFINITIONS.find(
+      (item) => item.group === group && item.method === method,
+    );
+
+    if (!definition) {
+      throw new EcomConnectorError(
+        `Shopee SDK API definition not found: ${group}.${method}`,
+        "SHOPEE_SDK_API_DEFINITION_NOT_FOUND",
+        500,
+      );
+    }
+
+    return definition;
+  }
+
+  private setupSdkAuthMethodAliases(): void {
+    this.auth.getAccessToken = (
+      codeOrParams: string | Record<string, any>,
+      shopId?: number | string,
+      mainAccountId?: number | string,
+    ) =>
+      this.requestSdkApi(
+        this.getSdkDefinition("auth", "getAccessToken"),
+        typeof codeOrParams === "object"
+          ? codeOrParams
+          : { code: codeOrParams, shopId, mainAccountId },
+      );
+
+    this.auth.getAccessTokenByResendCode = (
+      codeOrParams: string | Record<string, any>,
+    ) =>
+      this.requestSdkApi(
+        this.getSdkDefinition("auth", "getAccessTokenByResendCode"),
+        typeof codeOrParams === "object"
+          ? codeOrParams
+          : { resendCode: codeOrParams },
+      );
+
+    this.auth.getRefreshToken = (
+      refreshTokenOrParams: string | Record<string, any>,
+      shopId?: number | string,
+      merchantId?: number | string,
+    ) =>
+      this.requestSdkApi(
+        this.getSdkDefinition("auth", "getRefreshToken"),
+        typeof refreshTokenOrParams === "object"
+          ? refreshTokenOrParams
+          : { refreshToken: refreshTokenOrParams, shopId, merchantId },
+      );
   }
 
   /**

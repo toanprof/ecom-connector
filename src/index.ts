@@ -21,6 +21,7 @@ export {
 
 // Export platform constants
 export * from "./platforms/shopee/constants";
+export * from "./platforms/shopee/sdk-api";
 export * from "./platforms/tiktokshop/constants";
 export * from "./platforms/lazada/constants";
 export * from "./platforms/zalooa/constants";
