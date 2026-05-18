@@ -4,7 +4,7 @@ Tai lieu nay tong hop tu:
 
 - `D:/ecom-connector/shopee-sdk-1.6.1/docs/README.md`
 - Toan bo file `.md` trong `D:/ecom-connector/shopee-sdk-1.6.1/docs/managers`
-- Source thuc te trong `D:/ecom-connector/src/platforms/shopee`: `index.ts`, `sdk-api.ts`, `constants.ts`, `types.ts`
+- Source thuc te trong `D:/ecom-connector/src/platforms/shopee`: `index.ts`, `sdk-api.ts`, `sdk-api-types.ts`, `schemas/`, `constants.ts`, `types.ts`
 
 Muc tieu cua file nay la lam tai lieu doc hieu source cho AI: khi can sua Shopee connector, hay doc file nay truoc de nam kien truc, luong nghiep vu, quy tac ky request va danh sach API dang expose.
 
@@ -22,6 +22,8 @@ Entry point chinh:
 - `src/factory.ts`: `createEcomConnector({ platform: "shopee", ... })` tra ve `new ShopeePlatform(config)`.
 - `src/platforms/shopee/index.ts`: chua request signing, axios interceptors, mapper sang interface chung, pagination helper va alias auth.
 - `src/platforms/shopee/sdk-api.ts`: data-only catalog gom 431 API definitions tren 29 group.
+- `src/platforms/shopee/sdk-api-types.ts`: typed API group signatures duoc sinh tu `shopee-sdk-1.6.1/src/managers` va `src/schemas`.
+- `src/platforms/shopee/schemas/`: 37 schema files copy tu `shopee-sdk-1.6.1/src/schemas`, dung lam contract params/response cho service tich hop.
 - `src/platforms/shopee/constants.ts`: endpoint base, enum status, API path cho wrapper common, optional fields cua order.
 - `src/platforms/shopee/types.ts`: type thuan Shopee response cho product/order.
 
@@ -120,6 +122,61 @@ const detail = await platform.order.getOrdersDetail({
 ```
 
 Cung co `platform.sdkApi.product.getItemList(...)`. Hai cach nay tro ve cung mot requester.
+
+### 3.4 Schema va typed SDK API groups
+
+Sau update moi, source Shopee co them hai lop type quan trong:
+
+1. `src/platforms/shopee/schemas/`: copy toan bo 37 schema files tu `shopee-sdk-1.6.1/src/schemas`.
+2. `src/platforms/shopee/sdk-api-types.ts`: sinh typed interface cho du 431 API methods dua tren manager source va schema source.
+
+Schema duoc export theo namespace de service tich hop khong phai tu khai bao lai Shopee contract:
+
+```ts
+import { ShopeeSchemas } from "ecom-connector";
+
+type OrderListParams = ShopeeSchemas.GetOrderListParams;
+type OrderDetailResponse = ShopeeSchemas.GetOrdersDetailResponse;
+type ProductListParams = ShopeeSchemas.GetItemListParams;
+```
+
+Neu import sau tu platform Shopee:
+
+```ts
+import { ShopeeSchemas } from "ecom-connector/dist/platforms/shopee";
+```
+
+Luu y ve namespace:
+
+- `ShopeeSchemas` export cac schema chinh nhu `GetOrderListParams`, `GetItemBaseInfoResponse`, `GetEscrowDetailParams`.
+- `media.ts` va `media-space.ts` co nhieu ten type trung nhau, nen `schemas/index.ts` export rieng `ShopeeSchemas.Media` va `ShopeeSchemas.MediaSpace`.
+- Khong export schema bang `export *` truc tiep tu root vi se trung ten voi type chung cua connector nhu `Order`, `OrderItem`, `Address`.
+
+`sdk-api-types.ts` lam cho cac group truc tiep co type ro hon:
+
+```ts
+const shopee = createEcomConnector(config) as ShopeePlatform;
+
+await shopee.product.getItemList({
+  offset: 0,
+  pageSize: 50,
+  itemStatus: "NORMAL",
+});
+
+await shopee.order.getOrdersDetail({
+  orderSnList: ["ORDER_SN"],
+  responseOptionalFields: ["item_list", "total_amount"],
+});
+```
+
+Quy tac case cua type:
+
+- Schema goc cua SDK dung Shopee `snake_case`.
+- Runtime wrapper trong `requestSdkApi` nhan params camelCase hoac snake_case, roi chuyen sang snake_case truoc khi goi Shopee.
+- Runtime response JSON duoc chuyen sang camelCase bang `keysToCamel`.
+- Vi vay `sdk-api-types.ts` dung `ShopeeSdkInput<T> = T | ShopeeSdkCamelize<T>` cho params va `ShopeeSdkOutput<T>` cho response.
+
+Mot so file schema co runtime enum/const nen se sinh JavaScript trong `dist`; phan lon schema chi la type nen JS output gan nhu rong. Day la binh thuong.
 
 ## 4. Common connector API va luong xu ly
 
@@ -936,18 +993,34 @@ Quan ly voucher cua shop: tao, cap nhat, lay detail/list, ket thuc va xoa.
 - `SHOPEE_ORDER_OPTIONAL_FIELDS`: source dang request nhieu field detail order, gom buyer, shipping, cancellation, package, payment, invoice va EDT info.
 - Rate limit constant trong source: `RATE_LIMIT_PER_MINUTE=1000`, `RATE_LIMIT_PER_DAY=100000`; source chua implement limiter, app goi ben ngoai can tu quan ly retry/backoff.
 
+## 8.1 Schema files da bo sung
+
+Thu muc `src/platforms/shopee/schemas/` hien co 37 file:
+
+`access-token.ts`, `account-health.ts`, `add-on-deal.ts`, `ads.ts`, `ams.ts`, `attribute.ts`, `authed-merchant.ts`, `authed-shop.ts`, `base.ts`, `bundle-deal.ts`, `category.ts`, `discount.ts`, `fbs.ts`, `fetch.ts`, `first-mile.ts`, `follow-prize.ts`, `global-product.ts`, `index.ts`, `livestream.ts`, `logistics.ts`, `media.ts`, `media-space.ts`, `merchant.ts`, `order.ts`, `payment.ts`, `product.ts`, `public.ts`, `push.ts`, `region.ts`, `returns.ts`, `sbs.ts`, `shop.ts`, `shop-category.ts`, `shop-flash-sale.ts`, `top-picks.ts`, `video.ts`, `voucher.ts`.
+
+Khac biet so voi SDK goc:
+
+- `schemas/fetch.ts` khong import `node-fetch`; thay vao do dung `ShopeeFetchRequestInit` local de package nay khong phai them dependency moi.
+- `schemas/payment.ts` da doi import `../schemas/base.js` thanh `./base.js` cho dung vi file da nam ngay trong thu muc schemas moi.
+- `schemas/index.ts` export `Media` va `MediaSpace` theo namespace de tranh trung type name.
+
+Nen dung schema nhu contract cho service tich hop. Service chi nen khai bao DTO nghiep vu noi bo; khong nen tu khai bao lai Shopee params/response.
+
 ## 9. Quy tac khi AI sua source Shopee
 
 1. Neu them API manager moi, uu tien them definition vao `sdk-api.ts` thay vi viet method request rieng trong `index.ts`, tru khi can mapping sang interface chung.
-2. Params public cho SDK API nen nhan camelCase; de `requestSdkApi` tu chuyen snake_case.
-3. Neu Shopee yeu cau list dang `a,b,c`, them field snake_case vao `commaParams` trong definition.
-4. Neu endpoint tra binary document, giu `responseType: "arraybuffer"`; `requestSdkApi` da tra `Buffer` khi content type khong phai JSON.
-5. Khong bo qua `EcomConnectorError`; code ben ngoai dang ky vong loi co `code`, `statusCode`, `platformError`.
-6. Common API phai tra model repo chung `Product`/`Order`; Shopee payload goc nen dat trong `platformSpecific`.
-7. Can can than voi `updateProduct`: source hien goi `ADD_ITEM`; neu sua sang `/product/update_item`, can test regression voi du lieu Shopee thuc/sandbox.
-8. Cac auth endpoint public khong duoc yeu cau `accessToken`; cac endpoint `auth: true` phai fail som neu thieu `accessToken` hoac `shopId`.
-9. Khi dung docs SDK, nho rang wrapper nay khong instantiate SDK manager class; no chi mirror endpoint/method vao data definitions.
-10. Sau khi thay doi `sdk-api.ts`, chay typecheck/build va neu co the goi smoke test voi sandbox credentials.
+2. Neu them/sua endpoint SDK API, cap nhat dong thoi `sdk-api.ts`, `sdk-api-types.ts` va schema lien quan trong `schemas/`.
+3. Params public cho SDK API nen nhan camelCase hoac snake_case; de `requestSdkApi` tu chuyen snake_case.
+4. Neu Shopee yeu cau list dang `a,b,c`, them field snake_case vao `commaParams` trong definition.
+5. Neu endpoint tra binary document, giu `responseType: "arraybuffer"`; `requestSdkApi` da tra `Buffer` khi content type khong phai JSON.
+6. Khong bo qua `EcomConnectorError`; code ben ngoai dang ky vong loi co `code`, `statusCode`, `platformError`.
+7. Common API phai tra model repo chung `Product`/`Order`; Shopee payload goc nen dat trong `platformSpecific`.
+8. Can can than voi `updateProduct`: source hien goi `ADD_ITEM`; neu sua sang `/product/update_item`, can test regression voi du lieu Shopee thuc/sandbox.
+9. Cac auth endpoint public khong duoc yeu cau `accessToken`; cac endpoint `auth: true` phai fail som neu thieu `accessToken` hoac `shopId`.
+10. Khi dung docs SDK, nho rang wrapper nay khong instantiate SDK manager class; no chi mirror endpoint/method vao data definitions.
+11. Schema goc dung snake_case, runtime response cua wrapper dung camelCase. Khi sua type, phai xem `ShopeeSdkInput`, `ShopeeSdkOutput`, `ShopeeSdkCamelize`.
+12. Sau khi thay doi `sdk-api.ts`, `sdk-api-types.ts` hoac `schemas/`, bat buoc chay `npm run build`.
 
 ## 10. Quick examples
 
@@ -977,6 +1050,29 @@ const rawItems = await shopee.product.getItemList({
 const escrow = await shopee.payment.getEscrowDetail({
   orderSn: "ORDER_SN",
 });
+```
+
+### Dung ShopeeSchemas trong service tich hop
+
+```ts
+import { ShopeeSchemas } from "ecom-connector";
+
+export type ShopeeOrderSyncInput = {
+  shopId: string;
+  query: ShopeeSchemas.GetOrderListParams;
+};
+
+export type ShopeeOrderDetailPayload =
+  ShopeeSchemas.GetOrdersDetailResponse["response"]["order_list"][number];
+```
+
+Neu can schema media:
+
+```ts
+import { ShopeeSchemas } from "ecom-connector";
+
+type UploadImageParams = ShopeeSchemas.Media.UploadImageParams;
+type MediaSpaceUploadParams = ShopeeSchemas.MediaSpace.UploadImageParams;
 ```
 
 ### Ship order co pickup

@@ -22,9 +22,10 @@ import {
   createShopeeSdkApiGroups,
   SHOPEE_SDK_API_DEFINITIONS,
   ShopeeSdkApiDefinition,
-  ShopeeSdkApiGroup,
   ShopeeSdkApiGroups,
 } from "./sdk-api";
+
+export * as ShopeeSchemas from "./schemas";
 
 export class ShopeePlatform implements ECommercePlatform {
   private client: AxiosInstance;
@@ -32,35 +33,35 @@ export class ShopeePlatform implements ECommercePlatform {
   private baseURL: string = SHOPEE_CONSTANTS.ENDPOINT;
   private pathPrefix: string = "";
   public readonly sdkApi: ShopeeSdkApiGroups;
-  public readonly accountHealth: ShopeeSdkApiGroup;
-  public readonly addOnDeal: ShopeeSdkApiGroup;
-  public readonly ads: ShopeeSdkApiGroup;
-  public readonly ams: ShopeeSdkApiGroup;
-  public readonly auth: ShopeeSdkApiGroup;
-  public readonly bundleDeal: ShopeeSdkApiGroup;
-  public readonly discount: ShopeeSdkApiGroup;
-  public readonly fbs: ShopeeSdkApiGroup;
-  public readonly firstMile: ShopeeSdkApiGroup;
-  public readonly followPrize: ShopeeSdkApiGroup;
-  public readonly globalProduct: ShopeeSdkApiGroup;
-  public readonly livestream: ShopeeSdkApiGroup;
-  public readonly logistics: ShopeeSdkApiGroup;
-  public readonly media: ShopeeSdkApiGroup;
-  public readonly mediaSpace: ShopeeSdkApiGroup;
-  public readonly merchant: ShopeeSdkApiGroup;
-  public readonly order: ShopeeSdkApiGroup;
-  public readonly payment: ShopeeSdkApiGroup;
-  public readonly product: ShopeeSdkApiGroup;
-  public readonly public: ShopeeSdkApiGroup;
-  public readonly push: ShopeeSdkApiGroup;
-  public readonly returns: ShopeeSdkApiGroup;
-  public readonly sbs: ShopeeSdkApiGroup;
-  public readonly shop: ShopeeSdkApiGroup;
-  public readonly shopCategory: ShopeeSdkApiGroup;
-  public readonly shopFlashSale: ShopeeSdkApiGroup;
-  public readonly topPicks: ShopeeSdkApiGroup;
-  public readonly video: ShopeeSdkApiGroup;
-  public readonly voucher: ShopeeSdkApiGroup;
+  public readonly accountHealth: ShopeeSdkApiGroups["accountHealth"];
+  public readonly addOnDeal: ShopeeSdkApiGroups["addOnDeal"];
+  public readonly ads: ShopeeSdkApiGroups["ads"];
+  public readonly ams: ShopeeSdkApiGroups["ams"];
+  public readonly auth: ShopeeSdkApiGroups["auth"];
+  public readonly bundleDeal: ShopeeSdkApiGroups["bundleDeal"];
+  public readonly discount: ShopeeSdkApiGroups["discount"];
+  public readonly fbs: ShopeeSdkApiGroups["fbs"];
+  public readonly firstMile: ShopeeSdkApiGroups["firstMile"];
+  public readonly followPrize: ShopeeSdkApiGroups["followPrize"];
+  public readonly globalProduct: ShopeeSdkApiGroups["globalProduct"];
+  public readonly livestream: ShopeeSdkApiGroups["livestream"];
+  public readonly logistics: ShopeeSdkApiGroups["logistics"];
+  public readonly media: ShopeeSdkApiGroups["media"];
+  public readonly mediaSpace: ShopeeSdkApiGroups["mediaSpace"];
+  public readonly merchant: ShopeeSdkApiGroups["merchant"];
+  public readonly order: ShopeeSdkApiGroups["order"];
+  public readonly payment: ShopeeSdkApiGroups["payment"];
+  public readonly product: ShopeeSdkApiGroups["product"];
+  public readonly public: ShopeeSdkApiGroups["public"];
+  public readonly push: ShopeeSdkApiGroups["push"];
+  public readonly returns: ShopeeSdkApiGroups["returns"];
+  public readonly sbs: ShopeeSdkApiGroups["sbs"];
+  public readonly shop: ShopeeSdkApiGroups["shop"];
+  public readonly shopCategory: ShopeeSdkApiGroups["shopCategory"];
+  public readonly shopFlashSale: ShopeeSdkApiGroups["shopFlashSale"];
+  public readonly topPicks: ShopeeSdkApiGroups["topPicks"];
+  public readonly video: ShopeeSdkApiGroups["video"];
+  public readonly voucher: ShopeeSdkApiGroups["voucher"];
 
   constructor(config: EcomConnectorConfig) {
     this.credentials = config.credentials as ShopeeCredentials;

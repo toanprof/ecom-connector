@@ -3,6 +3,13 @@
  * Keep this file data-only; request behavior lives in index.ts.
  */
 
+import type {
+  ShopeeSdkApiGroup,
+  ShopeeTypedSdkApiGroups,
+} from "./sdk-api-types";
+
+export * from "./sdk-api-types";
+
 export type ShopeeSdkHttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 export interface ShopeeSdkApiDefinition {
@@ -14,40 +21,7 @@ export interface ShopeeSdkApiDefinition {
   commaParams?: readonly string[];
 }
 
-export type ShopeeSdkApiMethod = (...args: any[]) => Promise<any>;
-export type ShopeeSdkApiGroup = Record<string, ShopeeSdkApiMethod>;
-
-export interface ShopeeSdkApiGroups {
-  accountHealth: ShopeeSdkApiGroup;
-  addOnDeal: ShopeeSdkApiGroup;
-  ads: ShopeeSdkApiGroup;
-  ams: ShopeeSdkApiGroup;
-  auth: ShopeeSdkApiGroup;
-  bundleDeal: ShopeeSdkApiGroup;
-  discount: ShopeeSdkApiGroup;
-  fbs: ShopeeSdkApiGroup;
-  firstMile: ShopeeSdkApiGroup;
-  followPrize: ShopeeSdkApiGroup;
-  globalProduct: ShopeeSdkApiGroup;
-  livestream: ShopeeSdkApiGroup;
-  logistics: ShopeeSdkApiGroup;
-  media: ShopeeSdkApiGroup;
-  mediaSpace: ShopeeSdkApiGroup;
-  merchant: ShopeeSdkApiGroup;
-  order: ShopeeSdkApiGroup;
-  payment: ShopeeSdkApiGroup;
-  product: ShopeeSdkApiGroup;
-  public: ShopeeSdkApiGroup;
-  push: ShopeeSdkApiGroup;
-  returns: ShopeeSdkApiGroup;
-  sbs: ShopeeSdkApiGroup;
-  shop: ShopeeSdkApiGroup;
-  shopCategory: ShopeeSdkApiGroup;
-  shopFlashSale: ShopeeSdkApiGroup;
-  topPicks: ShopeeSdkApiGroup;
-  video: ShopeeSdkApiGroup;
-  voucher: ShopeeSdkApiGroup;
-}
+export interface ShopeeSdkApiGroups extends ShopeeTypedSdkApiGroups {}
 
 export type ShopeeSdkApiRequester = (
   definition: ShopeeSdkApiDefinition,
